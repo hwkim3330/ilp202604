@@ -273,9 +273,17 @@
       <img src="keti.png" alt="KETI" class="logo" onerror="this.style.display='none'">
       <h1>LAN9662</h1>
       <p class="sub">IEEE 802.1Qbv Time-Aware Shaper Configuration</p>
-      <div id="statusChip" class="chip chip-err">
-        <span class="dot"></span>
-        <span id="statusText">Connecting...</span>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
+        <select id="boardTransport" style="padding:6px 12px;border-radius:10px;border:1px solid var(--border);font-size:0.82rem;font-family:inherit;background:var(--card);cursor:pointer;">
+          <option value="serial">Serial (/dev/ttyACM0)</option>
+          <option value="eth">Ethernet (CoAP/UDP)</option>
+        </select>
+        <input id="boardHost" type="text" placeholder="192.168.1.10" value="192.168.1.10"
+          style="display:none;padding:6px 12px;border-radius:10px;border:1px solid var(--border);font-size:0.82rem;font-family:inherit;width:140px;background:var(--card);">
+        <div id="statusChip" class="chip chip-err">
+          <span class="dot"></span>
+          <span id="statusText">Connecting...</span>
+        </div>
       </div>
     </header>
 
@@ -418,6 +426,16 @@
     let lastPortsData = {};   // last read data for re-render
     const editState = {};      // portNum → { cycleUs, entries: [{gateStates, durationUs}] }
 
+    /* ── Transport selection ── */
+    const boardTransportSel = document.getElementById('boardTransport');
+    const boardHostInput = document.getElementById('boardHost');
+    boardTransportSel.addEventListener('change', () => {
+      boardHostInput.style.display = boardTransportSel.value === 'eth' ? 'inline-block' : 'none';
+      checkStatus();
+    });
+    function getBoardTransport() { return boardTransportSel.value; }
+    function getBoardHost() { return boardHostInput.value.trim(); }
+
     /* ══════════════════════════════════════════
        Board Status
        ══════════════════════════════════════════ */
@@ -425,12 +443,20 @@
       const chip = document.getElementById('statusChip');
       const text = document.getElementById('statusText');
       const btn = document.getElementById('btnRead');
+      const transport = getBoardTransport();
       try {
-        const res = await fetch('/api/board/status');
+        let url = `/api/board/status?transport=${transport}`;
+        if (transport === 'serial') url += '&device=/dev/ttyACM0';
+        else url += `&host=${encodeURIComponent(getBoardHost())}`;
+        const res = await fetch(url);
         const d = await res.json();
         boardConnected = d.connected;
         chip.className = 'chip ' + (d.connected ? 'chip-ok' : 'chip-err');
-        text.textContent = d.connected ? `Connected  ${d.device}` : 'Disconnected';
+        if (transport === 'serial') {
+          text.textContent = d.connected ? `Connected  ${d.device}` : 'Disconnected';
+        } else {
+          text.textContent = d.connected ? `Connected  ${getBoardHost()}` : 'Unreachable';
+        }
         btn.disabled = !d.connected || reading;
       } catch {
         chip.className = 'chip chip-err';
@@ -499,7 +525,7 @@
           const res = await fetch('/api/gcl/push-port', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ port: pn, cycleUs: cfg.cycleUs, entries: cfg.entries })
+            body: JSON.stringify({ port: pn, cycleUs: cfg.cycleUs, entries: cfg.entries, transport: getBoardTransport(), host: getBoardHost() || undefined })
           });
           const data = await res.json();
           if (!data.success) { allOk = false; showToast(`Port ${pn} failed: ${data.error || 'unknown'}`, 'err'); }
@@ -531,7 +557,11 @@
       btn.disabled = true; btn.textContent = 'Reading...';
       ct.innerHTML = `<div class="loading-msg"><div class="spinner-ring"></div><br>Reading TAS configuration...<br><span style="font-size:.8rem;color:var(--text3)">~30 seconds</span></div>`;
       try {
-        const res = await fetch('/api/gcl/read');
+        const transport = getBoardTransport();
+        let readUrl = `/api/gcl/read?transport=${transport}`;
+        if (transport === 'serial') readUrl += '&device=/dev/ttyACM0';
+        else readUrl += `&host=${encodeURIComponent(getBoardHost())}`;
+        const res = await fetch(readUrl);
         const data = await res.json();
         if (data.error) { ct.innerHTML = `<div class="error-card">${data.error}</div>`; return; }
         const sec = ((Date.now() - start) / 1000).toFixed(1);
@@ -801,7 +831,9 @@
           body: JSON.stringify({
             port: portNum,
             cycleUs: st.cycleUs,
-            entries: st.entries
+            entries: st.entries,
+            transport: getBoardTransport(),
+            host: getBoardHost() || undefined
           })
         });
         const data = await res.json();

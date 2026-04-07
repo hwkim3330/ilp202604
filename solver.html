@@ -336,6 +336,12 @@
         <span class="board-dot" id="boardDot"></span>
         <span id="boardLabel">Board: checking...</span>
       </div>
+      <select id="solverTransport" style="padding:4px 10px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);font-size:0.78rem;font-family:inherit;background:rgba(248,250,252,0.8);cursor:pointer;">
+        <option value="serial">Serial</option>
+        <option value="eth">Ethernet</option>
+      </select>
+      <input id="solverHost" type="text" placeholder="192.168.1.10" value="192.168.1.10"
+        style="display:none;padding:4px 10px;border-radius:6px;border:1px solid rgba(99,102,241,0.2);font-size:0.78rem;font-family:inherit;width:120px;background:rgba(248,250,252,0.8);">
       <button class="btn-yaml" id="btnExportYAML" disabled>Export YAML</button>
       <button class="btn-board" id="btnPushBoard" disabled>Push to Board</button>
       <div class="board-log" id="boardLog"></div>
@@ -968,15 +974,31 @@
     btn.disabled = !currentResult || !boardConnected;
   }
 
+  /* ── Solver transport ── */
+  const solverTransportSel = document.getElementById('solverTransport');
+  const solverHostInput = document.getElementById('solverHost');
+  solverTransportSel.addEventListener('change', () => {
+    solverHostInput.style.display = solverTransportSel.value === 'eth' ? 'inline-block' : 'none';
+    checkBoardStatus();
+  });
+
   async function checkBoardStatus() {
     const dot = document.getElementById('boardDot');
     const label = document.getElementById('boardLabel');
+    const transport = solverTransportSel.value;
     try {
-      const res = await fetch('/api/board/status');
+      let url = `/api/board/status?transport=${transport}`;
+      if (transport === 'serial') url += '&device=/dev/ttyACM0';
+      else url += `&host=${encodeURIComponent(solverHostInput.value.trim())}`;
+      const res = await fetch(url);
       const data = await res.json();
       boardConnected = data.connected;
       dot.className = 'board-dot' + (data.connected ? ' connected' : '');
-      label.textContent = data.connected ? `Board: ${data.device}` : 'Board: disconnected';
+      if (transport === 'serial') {
+        label.textContent = data.connected ? `Board: ${data.device}` : 'Board: disconnected';
+      } else {
+        label.textContent = data.connected ? `Board: ${solverHostInput.value.trim()}` : 'Board: unreachable';
+      }
     } catch {
       boardConnected = false;
       dot.className = 'board-dot';
@@ -1010,7 +1032,9 @@
         body: JSON.stringify({
           boardConfigs: currentResult.boardConfigs,
           portMap: getPortMap(),
-          device: '/dev/ttyACM0'
+          transport: solverTransportSel.value,
+          device: solverTransportSel.value === 'serial' ? '/dev/ttyACM0' : undefined,
+          host: solverTransportSel.value === 'eth' ? solverHostInput.value.trim() : undefined
         })
       });
       const data = await res.json();
