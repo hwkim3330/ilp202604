@@ -267,6 +267,55 @@
     }
     .gate-bit-mini.open { background: rgba(52,199,89,.2); color: var(--green); }
     .gate-bit-mini.closed { background: rgba(0,0,0,.04); color: var(--text3); }
+
+    /* ── Multi-board panel ── */
+    .multiboard { flex: 2; padding: 10px 16px; }
+    .multiboard .bc-label { margin-bottom: 6px; }
+    .board-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 0; border-bottom: 1px solid var(--border);
+      font-size: 0.65rem;
+    }
+    .board-row:last-child { border-bottom: none; }
+    .board-row .sw-name {
+      font-weight: 700; color: var(--text); min-width: 70px;
+    }
+    .board-row .sw-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+    }
+    .board-row input {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 2px 6px; border-radius: 4px; font-size: 0.62rem;
+      font-family: inherit; width: 100px; outline: none;
+      color: var(--text);
+    }
+    .board-row input:focus { border-color: var(--accent); }
+    .board-row .btn-sm {
+      padding: 2px 8px; font-size: 0.58rem; border-radius: 4px;
+      background: rgba(52,199,89,.06); border: 1px solid rgba(52,199,89,.2);
+      color: var(--green); cursor: pointer; font-weight: 700;
+      font-family: inherit;
+    }
+    .board-row .btn-sm:disabled { opacity: .3; cursor: not-allowed; }
+    .board-row .btn-sm:hover:not(:disabled) { background: rgba(52,199,89,.12); }
+
+    /* ── LiDAR TAS live stats ── */
+    .lidar-tas { flex: 2; padding: 10px 16px; }
+    .lidar-tas .bc-label { margin-bottom: 6px; }
+    .tas-flow-row {
+      display: flex; align-items: center; gap: 6px;
+      padding: 2px 0; font-size: 0.62rem;
+    }
+    .tas-flow-dot {
+      width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0;
+    }
+    .tas-flow-name { min-width: 60px; font-weight: 600; color: var(--text2); }
+    .tas-flow-bar {
+      flex: 1; height: 6px; background: var(--bg);
+      border-radius: 3px; overflow: hidden; border: 1px solid var(--border);
+    }
+    .tas-flow-fill { height: 100%; border-radius: 2px; transition: width .3s; }
+    .tas-flow-val { min-width: 50px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text3); }
   </style>
 </head>
 <body>
@@ -379,9 +428,35 @@
         <div class="bc-label">GCL Timeline — SW_REAR Egress (500 µs cycle)</div>
         <div id="ganttMini"></div>
       </div>
-      <div class="bottom-card board-mini">
-        <div class="bc-label">Board GCL (LAN9662 Port 1)</div>
-        <div id="boardMini"></div>
+      <div class="bottom-card multiboard">
+        <div class="bc-label">Multi-Board Control</div>
+        <div id="multiBoard">
+          <div class="board-row" data-sw="SW_FL">
+            <div class="sw-dot dot-off" id="mbDot_FL"></div>
+            <span class="sw-name">SW_FL</span>
+            <input type="text" id="mbIp_FL" placeholder="192.168.1.11" value="192.168.1.11">
+            <button class="btn-sm" id="mbPush_FL" disabled>Push</button>
+            <span id="mbStatus_FL" style="color:var(--text3)">—</span>
+          </div>
+          <div class="board-row" data-sw="SW_FR">
+            <div class="sw-dot dot-off" id="mbDot_FR"></div>
+            <span class="sw-name">SW_FR</span>
+            <input type="text" id="mbIp_FR" placeholder="192.168.1.12" value="192.168.1.12">
+            <button class="btn-sm" id="mbPush_FR" disabled>Push</button>
+            <span id="mbStatus_FR" style="color:var(--text3)">—</span>
+          </div>
+          <div class="board-row" data-sw="SW_REAR">
+            <div class="sw-dot dot-off" id="mbDot_REAR"></div>
+            <span class="sw-name">SW_REAR</span>
+            <input type="text" id="mbIp_REAR" placeholder="192.168.1.10" value="192.168.1.10">
+            <button class="btn-sm" id="mbPush_REAR" disabled>Push</button>
+            <span id="mbStatus_REAR" style="color:var(--text3)">—</span>
+          </div>
+        </div>
+      </div>
+      <div class="bottom-card lidar-tas">
+        <div class="bc-label">LiDAR Traffic vs TAS Allocation</div>
+        <div id="lidarTas"></div>
       </div>
     </div>
   </div>
@@ -726,6 +801,8 @@
     };
     ws.onmessage = e => {
       if (typeof e.data === 'string') return;
+      lidarPktCounter++;
+      lidarByteCounter += e.data.byteLength;
       updateLidarPoints(new Float32Array(e.data));
     };
     ws.onclose = () => {
@@ -1001,6 +1078,165 @@
     btn.textContent = 'Push to Board';
     updatePushBtn();
   });
+
+  /* ═══════════════════════════════════════════════
+     MULTI-BOARD
+     ═══════════════════════════════════════════════ */
+  const MB_SWITCHES = [
+    { key: 'FL', swId: 'SW_FL', label: 'Front-Left ZC' },
+    { key: 'FR', swId: 'SW_FR', label: 'Front-Right ZC' },
+    { key: 'REAR', swId: 'SW_REAR', label: 'Rear Gateway' }
+  ];
+
+  const mbState = { FL: false, FR: false, REAR: false };
+
+  async function checkMultiBoard() {
+    for (const mb of MB_SWITCHES) {
+      const ip = document.getElementById(`mbIp_${mb.key}`).value.trim();
+      if (!ip) continue;
+      try {
+        const res = await fetch(`/api/board/status?transport=eth&host=${encodeURIComponent(ip)}`);
+        const data = await res.json();
+        mbState[mb.key] = data.connected;
+        document.getElementById(`mbDot_${mb.key}`).className = 'sw-dot ' + (data.connected ? 'dot-green' : 'dot-off');
+        document.getElementById(`mbStatus_${mb.key}`).textContent = data.connected ? 'Online' : 'Offline';
+        document.getElementById(`mbStatus_${mb.key}`).style.color = data.connected ? 'var(--green)' : 'var(--text3)';
+        document.getElementById(`mbPush_${mb.key}`).disabled = !data.connected || !currentResult;
+      } catch {
+        mbState[mb.key] = false;
+        document.getElementById(`mbDot_${mb.key}`).className = 'sw-dot dot-off';
+      }
+    }
+  }
+
+  // Per-switch push
+  for (const mb of MB_SWITCHES) {
+    document.getElementById(`mbPush_${mb.key}`).addEventListener('click', async () => {
+      if (!currentResult?.boardConfigs?.[mb.swId]) return;
+      const ip = document.getElementById(`mbIp_${mb.key}`).value.trim();
+      const btn = document.getElementById(`mbPush_${mb.key}`);
+      const status = document.getElementById(`mbStatus_${mb.key}`);
+      btn.disabled = true; btn.textContent = '...';
+
+      // Build port map for this switch
+      const swCfg = currentResult.boardConfigs[mb.swId];
+      const portLinks = Object.keys(swCfg.ports);
+      const portMap = {};
+      portLinks.forEach((linkId, i) => { portMap[linkId] = String(i + 1); });
+
+      try {
+        const res = await fetch('/api/gcl/push', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            boardConfigs: { [mb.swId]: swCfg },
+            portMap,
+            transport: 'eth',
+            host: ip
+          })
+        });
+        const data = await res.json();
+        if (data.error) {
+          status.textContent = 'Err'; status.style.color = 'var(--red)';
+        } else {
+          const ok = data.results.filter(r => r.success).length;
+          status.textContent = `${ok}/${data.results.length} OK`;
+          status.style.color = ok === data.results.length ? 'var(--green)' : 'var(--orange)';
+        }
+      } catch (e) {
+        status.textContent = 'Fail'; status.style.color = 'var(--red)';
+      }
+      btn.textContent = 'Push';
+      btn.disabled = !mbState[mb.key];
+    });
+  }
+
+  // Check multi-board every 10s
+  setInterval(checkMultiBoard, 10000);
+  setTimeout(checkMultiBoard, 2000);
+
+  /* ═══════════════════════════════════════════════
+     LIDAR TAS LIVE STATS
+     ═══════════════════════════════════════════════ */
+  // Track LiDAR traffic rate and map to TAS time slots
+  let lidarPktRate = 0; // packets/sec
+  let lidarByteRate = 0; // bytes/sec
+  let lidarPktCounter = 0;
+  let lidarByteCounter = 0;
+  let lastLidarStatsTime = performance.now();
+
+  // Hook into LiDAR frame updates
+  const origUpdateLidar = updateLidarPoints;
+  const wrappedUpdateLidar = function(data) {
+    lidarPktCounter++;
+    lidarByteCounter += data.byteLength;
+    origUpdateLidar(data);
+  };
+  // We can't easily wrap the function reference, so we track in ws.onmessage later
+
+  function updateLidarTasPanel() {
+    const now = performance.now();
+    const dt = (now - lastLidarStatsTime) / 1000;
+    if (dt >= 1) {
+      lidarPktRate = lidarPktCounter / dt;
+      lidarByteRate = lidarByteCounter / dt;
+      lidarPktCounter = 0;
+      lidarByteCounter = 0;
+      lastLidarStatsTime = now;
+    }
+
+    const container = document.getElementById('lidarTas');
+    if (!currentResult) { container.innerHTML = '<div style="font-size:0.62rem;color:var(--text3)">Solve first</div>'; return; }
+
+    // Map solver flows to their TAS allocation
+    const flows = [
+      { id: 'f_lidar_fc', name: 'G32-FC', color: '#F28E2B', tc: 7, payload: 1248, period: 500 },
+      { id: 'f_lidar_fl', name: 'PND-FL', color: '#E9C46A', tc: 6, payload: 812, period: 500 },
+      { id: 'f_lidar_fr', name: 'PND-FR', color: '#E76F51', tc: 5, payload: 812, period: 500 },
+      { id: 'f_lidar_r', name: 'G32-R', color: '#D4A574', tc: 4, payload: 1248, period: 1000 },
+      { id: 'f_radar_f', name: 'MRR-F', color: '#457B9D', tc: 3, payload: 128, period: 500 },
+    ];
+
+    // Calculate utilization per flow on bottleneck link (SW_REAR→ACU_IT)
+    const cycleUs = 500;
+    const linkRate = 1000; // Mbps
+    let html = '';
+    for (const f of flows) {
+      const txUs = (f.payload + 38) * 8 / linkRate; // transmission time in µs
+      const pktsPerCycle = cycleUs / f.period;
+      const util = (txUs * pktsPerCycle) / cycleUs * 100;
+
+      // Live LiDAR bandwidth for LiDAR flows
+      let liveLabel = '';
+      if (f.id.startsWith('f_lidar') && lidarByteRate > 0) {
+        const liveMbps = lidarByteRate * 8 / 1e6 / 4; // divide by 4 flows roughly
+        liveLabel = `${liveMbps.toFixed(1)} Mbps`;
+      }
+
+      html += `<div class="tas-flow-row">
+        <div class="tas-flow-dot" style="background:${f.color}"></div>
+        <span class="tas-flow-name">${f.name}</span>
+        <div class="tas-flow-bar">
+          <div class="tas-flow-fill" style="width:${Math.min(util * 5, 100)}%;background:${f.color};opacity:0.7"></div>
+        </div>
+        <span class="tas-flow-val">${txUs.toFixed(1)}µs TC${f.tc}</span>
+      </div>`;
+    }
+
+    // Add live LiDAR summary
+    if (lidarByteRate > 0) {
+      const totalMbps = lidarByteRate * 8 / 1e6;
+      const fps = lidarPktRate;
+      html += `<div style="margin-top:4px;padding-top:4px;border-top:1px solid var(--border);font-size:0.6rem;color:var(--text2);">
+        Live: <strong>${totalMbps.toFixed(1)} Mbps</strong> @ ${fps.toFixed(0)} fps
+        &mdash; TAS slot: <strong>TC7 ${(1248+38)*8/1000}µs</strong> / 500µs cycle
+      </div>`;
+    }
+
+    container.innerHTML = html;
+  }
+
+  setInterval(updateLidarTasPanel, 1000);
 
   /* ═══════════════════════════════════════════════
      BOOT
