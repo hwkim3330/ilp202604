@@ -166,10 +166,9 @@
 
     <!-- Port cards container -->
     <div id="portsContainer">
-      <div class="empty-state">
-        <h2>No Configuration Loaded</h2>
-        <p>Connect the LAN9662 board and click "Read from Board" to fetch the current TAS configuration.<br>
-        Or use the <a href="solver.html" style="color:var(--cyan)">GCL Solver</a> to compute and push a new configuration.</p>
+      <div class="loading-msg">
+        <div class="spinner-lg"></div><br>
+        Connecting to board...
       </div>
     </div>
 
@@ -196,6 +195,7 @@
 
     /* ── Board status polling ── */
     let boardConnected = false;
+    let hasData = false;
 
     async function checkStatus() {
       const dot = document.getElementById('statusDot');
@@ -209,7 +209,7 @@
         dot.className = 'dot' + (data.connected ? ' ok' : ' err');
         label.textContent = data.connected ? 'Connected' : 'Disconnected';
         device.textContent = data.device;
-        btn.disabled = !data.connected;
+        btn.disabled = !data.connected || reading;
       } catch {
         dot.className = 'dot err';
         label.textContent = 'Server offline';
@@ -217,9 +217,21 @@
         btn.disabled = true;
         boardConnected = false;
       }
+      // Show disconnect message only if we never loaded data
+      if (!boardConnected && !hasData && !reading) {
+        document.getElementById('portsContainer').innerHTML = `
+          <div class="empty-state">
+            <h2>Board Not Connected</h2>
+            <p>Connect the LAN9662 board to <code style="color:var(--cyan)">/dev/ttyACM0</code> to read the TAS configuration.<br>
+            The page will automatically read when the board is detected.</p>
+          </div>`;
+      }
     }
 
-    checkStatus();
+    // On page load: check status, auto-read if connected
+    checkStatus().then(() => {
+      if (boardConnected) readBoard();
+    });
     setInterval(checkStatus, 5000);
 
     /* ── Read board configuration ── */
@@ -254,6 +266,7 @@
 
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         readTime.textContent = `Last read: ${new Date().toLocaleTimeString()} (${elapsed}s)`;
+        hasData = true;
 
         renderPorts(data.ports);
       } catch (e) {
