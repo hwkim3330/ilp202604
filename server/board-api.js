@@ -166,7 +166,7 @@ router.get('/gcl/read', async (req, res) => {
 
   try {
     const args = ['get', '-d', device, '--transport', transport];
-    const { stdout } = await ketiTsn(args, 60000);
+    const { stdout } = await ketiTsn(args, 90000);
 
     // Strip "--- Configuration ---" header if present
     const configStart = stdout.indexOf('--- Configuration ---');
