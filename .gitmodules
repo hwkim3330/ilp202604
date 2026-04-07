@@ -1,0 +1,3 @@
+[submodule "keti-tsn-cli"]
+	path = keti-tsn-cli
+	url = https://github.com/hrkim-KETI/keti-tsn-cli.git

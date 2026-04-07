@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROii GCL Solver &mdash; LAN9662 Board Integration</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <style>
+    /* ═══════════════════════════════════════════════
+       Light Theme — Indigo Accent
+       ═══════════════════════════════════════════════ */
+    :root {
+      --bg: #f8f9fa; --bg2: #f0f2f5;
+      --card: #ffffff; --card-hi: #f8fafc;
+      --border: rgba(99,102,241,0.2); --border-hi: rgba(99,102,241,0.4);
+      --text: #1e293b; --text2: #475569; --text3: #64748b;
+      --cyan: #0891b2; --blue: #6366F1; --purple: #7c3aed;
+      --orange: #d97706; --red: #dc2626; --green: #059669; --pink: #db2777;
+      --flow-ctrl: #6366F1; --flow-sensor: #059669; --flow-video: #db2777;
+      --guard: #d97706; --be: #e2e8f0;
+    }
+    body { background: linear-gradient(135deg, #f8f9fa 0%, #eef2ff 50%, #e0e7ff 100%); }
+    .bg-grid {
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,102,241,0.06), transparent),
+        radial-gradient(ellipse 60% 40% at 80% 100%, rgba(6,182,212,0.04), transparent),
+        linear-gradient(rgba(99,102,241,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,0.06) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+    }
+    .card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(99,102,241,0.15);
+      backdrop-filter: blur(20px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+    }
+    .card:hover { border-color: rgba(99,102,241,0.3); }
+    .card-title { color: var(--text2); }
+    .card-title::before { background: var(--blue); }
+    .metric-card {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(99,102,241,0.15);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .metric-card::after { background: linear-gradient(90deg, var(--blue), transparent); }
+    .metric-val { color: var(--blue); }
+    .svg-container { background: rgba(248,250,252,0.8); }
+    .tooltip {
+      background: rgba(255,255,255,0.97);
+      border: 1px solid rgba(99,102,241,0.25);
+      color: var(--text); box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    }
+    .tooltip .tt-title { color: var(--blue); }
+    .tooltip .tt-k { color: var(--text3); }
+    .btn-primary { background: linear-gradient(135deg, #6366F1 0%, #818CF8 100%); color: #fff; }
+    .btn-secondary { background: rgba(248,250,252,0.8); color: var(--text); border: 1px solid rgba(99,102,241,0.2); }
+    .btn-secondary:hover { border-color: var(--blue); background: #fff; }
+    .engine-badge.loading { background: rgba(217,119,6,0.1); color: var(--orange); border: 1px solid rgba(217,119,6,0.2); }
+    .engine-badge.ready { background: rgba(5,150,105,0.1); color: var(--green); border: 1px solid rgba(5,150,105,0.2); }
+    .spinner { border-color: rgba(99,102,241,0.2); border-top-color: var(--blue); }
+    .pkt-table th { border-bottom: 1px solid rgba(99,102,241,0.15); color: var(--text3); }
+    .pkt-table td { border-bottom: 1px solid rgba(99,102,241,0.08); }
+    .pkt-table tr:hover td { background: rgba(99,102,241,0.04); }
+    .topo-link { stroke: rgba(99,102,241,0.25); }
+    .auto-desc { background: rgba(255,255,255,0.95); border: 1px solid rgba(99,102,241,0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .auto-desc h3 { color: var(--blue); }
+    .auto-domain-legend .domain-tag { border: 1px solid rgba(99,102,241,0.15); background: rgba(255,255,255,0.8); color: var(--text2); }
+    pre { background: rgba(248,250,252,0.9); border-color: rgba(99,102,241,0.15); color: var(--text2); }
+
+    /* ── Header ─────────────────────────────────── */
+    .keti-header {
+      display: flex; align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 8px;
+    }
+    .keti-header img { height: 40px; width: auto; }
+    .keti-header h1 {
+      font-size: 2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #6366F1 0%, #818CF8 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+
+    /* ── 3D Shuttle Card ──────────────────────── */
+    .shuttle-3d-card {
+      position: relative; border-radius: var(--radius); overflow: hidden;
+      margin-bottom: 16px; background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(99,102,241,0.15);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04); backdrop-filter: blur(20px);
+    }
+    #canvas3d { width: 100%; height: 500px; display: block; cursor: grab;
+      background: linear-gradient(180deg, #f8f9fa 0%, #eef2ff 100%); }
+    #canvas3d:active { cursor: grabbing; }
+    .shuttle-3d-label {
+      position: absolute; bottom: 12px; left: 16px;
+      font-size: 0.72rem; color: var(--text3);
+      background: rgba(255,255,255,0.85); padding: 4px 10px;
+      border-radius: 8px; backdrop-filter: blur(10px);
+      border: 1px solid rgba(99,102,241,0.1);
+    }
+
+    /* ── PCP Assignment Table ──────────────────── */
+    .pcp-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 10px; }
+    .pcp-table th { text-align: left; padding: 6px 10px; color: var(--text3); font-weight: 600; border-bottom: 2px solid rgba(99,102,241,0.2); }
+    .pcp-table td { padding: 6px 10px; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .pcp-table tr:hover td { background: rgba(99,102,241,0.03); }
+    .pcp-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 4px; font-weight: 700;
+      font-size: 0.78rem; font-family: 'Courier New', monospace;
+    }
+    .pcp-badge.hi  { background: rgba(242,142,43,0.12); color: #E76F51; }
+    .pcp-badge.mid { background: rgba(69,123,157,0.12); color: #457B9D; }
+    .pcp-badge.lo  { background: rgba(173,181,189,0.12); color: #6c757d; }
+
+    /* ── Solver Buttons ──────────────────────── */
+    .solver-bar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 16px; padding: 12px 20px;
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(99,102,241,0.15);
+      border-radius: var(--radius); box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .btn-case {
+      padding: 6px 18px; border-radius: 8px; border: 1px solid rgba(99,102,241,0.2);
+      background: rgba(248,250,252,0.8); color: var(--text2); cursor: pointer;
+      font-size: 0.82rem; font-weight: 600; transition: all 0.15s;
+    }
+    .btn-case:hover { border-color: var(--blue); color: var(--blue); }
+    .btn-case.active { background: linear-gradient(135deg, #6366F1, #818CF8); color: #fff; border-color: transparent; }
+    .btn-compare {
+      padding: 6px 18px; border-radius: 8px; border: 1px solid rgba(99,102,241,0.2);
+      background: rgba(248,250,252,0.8); color: var(--text2); cursor: pointer;
+      font-size: 0.82rem; font-weight: 600; transition: all 0.15s;
+    }
+    .btn-compare:hover { border-color: var(--purple); color: var(--purple); }
+
+    /* ── Per-Switch GCL Cards ──────────────────── */
+    .gcl-switch-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    @media (max-width: 900px) { .gcl-switch-grid { grid-template-columns: 1fr; } }
+    .gcl-switch-card {
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(99,102,241,0.15);
+      border-radius: var(--radius); padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .gcl-switch-card .sw-header {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(99,102,241,0.15);
+    }
+    .sw-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+    .sw-name { font-weight: 700; font-size: 0.95rem; color: var(--text); }
+    .sw-chip { font-size: 0.7rem; padding: 2px 8px; border-radius: 6px; background: rgba(99,102,241,0.1); color: var(--blue); font-weight: 600; }
+    .sw-stats { margin-left: auto; font-size: 0.75rem; color: var(--text3); }
+    .link-label-dir { font-size: 0.8rem; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+
+    /* ── Board Configuration ────────────────────── */
+    .board-section {
+      margin-bottom: 20px; padding: 16px; border-radius: 10px;
+      background: rgba(248,250,252,0.8); border: 1px solid rgba(99,102,241,0.12);
+    }
+    .board-section-title {
+      font-size: 1rem; font-weight: 700; color: var(--blue);
+      margin-bottom: 12px; padding-bottom: 8px;
+      border-bottom: 2px solid rgba(99,102,241,0.15);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .board-section-title .sw-dot { width: 10px; height: 10px; border-radius: 3px; }
+    .board-port {
+      margin-bottom: 14px; padding: 10px 14px; border-radius: 8px;
+      background: #fff; border: 1px solid rgba(99,102,241,0.08);
+    }
+    .board-port-header {
+      font-size: 0.85rem; font-weight: 600; color: var(--text2);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+    }
+    .board-port-header .rate-badge {
+      font-size: 0.7rem; padding: 1px 6px; border-radius: 4px;
+      background: rgba(99,102,241,0.08); color: var(--blue); font-weight: 600;
+    }
+    .gcl-board-table {
+      width: 100%; border-collapse: collapse; font-size: 0.78rem;
+    }
+    .gcl-board-table th {
+      text-align: left; padding: 4px 8px; color: var(--text3);
+      border-bottom: 1px solid rgba(99,102,241,0.15); font-weight: 600;
+    }
+    .gcl-board-table td {
+      padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.04);
+      font-family: 'Courier New', monospace; font-size: 0.75rem;
+    }
+    .gcl-board-table tr:hover td { background: rgba(99,102,241,0.03); }
+    .gate-bits { display: inline-flex; gap: 1px; }
+    .gate-bit {
+      display: inline-block; width: 10px; height: 14px; border-radius: 2px;
+      font-size: 7px; text-align: center; line-height: 14px; font-weight: 700;
+    }
+    .gate-bit.open { background: rgba(5,150,105,0.2); color: var(--green); }
+    .gate-bit.closed { background: rgba(0,0,0,0.06); color: var(--text3); }
+    .pcp-map {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+      font-size: 0.72rem; color: var(--text2);
+    }
+    .pcp-tag {
+      padding: 2px 8px; border-radius: 4px; font-weight: 600;
+      background: rgba(99,102,241,0.06); border: 1px solid rgba(99,102,241,0.12);
+    }
+    .board-summary { font-size: 0.75rem; color: var(--text3); margin-top: 4px; }
+
+    /* ── GCL entry table (existing switch cards) ── */
+    .gcl-entry-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .gcl-entry-table th { text-align: left; padding: 4px 8px; color: var(--text3); border-bottom: 1px solid rgba(99,102,241,0.15); font-weight: 600; }
+    .gcl-entry-table td { padding: 4px 8px; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .gcl-entry-table tr:hover td { background: rgba(0,0,0,0.03); }
+    .gate-mask { font-family: 'Courier New', monospace; font-size: 0.75rem; letter-spacing: 1px; font-weight: 700; }
+    .gate-open  { color: var(--green); }
+    .gate-guard { color: var(--orange); }
+    .gate-closed { color: var(--text3); opacity: 0.5; }
+    .entry-bar { height: 6px; border-radius: 3px; margin-top: 2px; }
+
+    /* ── Compare side-by-side ─────────────────── */
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 900px) { .compare-grid { grid-template-columns: 1fr; } }
+    .compare-panel {
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(99,102,241,0.15);
+      border-radius: var(--radius); padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .compare-panel h3 {
+      font-size: 1rem; font-weight: 700; margin-bottom: 12px;
+      padding-bottom: 8px; border-bottom: 2px solid rgba(99,102,241,0.15);
+    }
+    .compare-metric { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.82rem; }
+    .compare-metric .label { color: var(--text3); }
+    .compare-metric .value { font-weight: 700; color: var(--text); }
+    .compare-winner { color: var(--green) !important; }
+
+    /* ── Board Toolbar ─────────────────────────── */
+    .board-toolbar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 16px; padding: 12px 20px;
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(99,102,241,0.15);
+      border-radius: var(--radius); box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .board-status {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.82rem; font-weight: 600; color: var(--text2);
+    }
+    .board-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #adb5bd; transition: background 0.3s;
+    }
+    .board-dot.connected { background: var(--green); box-shadow: 0 0 6px rgba(5,150,105,0.5); }
+    .board-dot.error { background: var(--red); }
+    .btn-board {
+      padding: 6px 18px; border-radius: 8px; border: 1px solid rgba(5,150,105,0.3);
+      background: rgba(5,150,105,0.08); color: var(--green); cursor: pointer;
+      font-size: 0.82rem; font-weight: 600; transition: all 0.15s;
+    }
+    .btn-board:hover { background: rgba(5,150,105,0.15); border-color: var(--green); }
+    .btn-board:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-board.pushing { background: rgba(217,119,6,0.1); color: var(--orange); border-color: rgba(217,119,6,0.3); }
+    .btn-yaml {
+      padding: 6px 18px; border-radius: 8px; border: 1px solid rgba(99,102,241,0.2);
+      background: rgba(248,250,252,0.8); color: var(--text2); cursor: pointer;
+      font-size: 0.82rem; font-weight: 600; transition: all 0.15s;
+    }
+    .btn-yaml:hover { border-color: var(--blue); color: var(--blue); }
+    .btn-yaml:disabled { opacity: 0.4; cursor: not-allowed; }
+    .board-log {
+      font-size: 0.75rem; color: var(--text3); margin-left: auto;
+      max-width: 400px; text-align: right;
+    }
+
+    /* ── Port Mapping Panel ────────────────────── */
+    .port-map-panel {
+      margin-bottom: 16px; padding: 16px 20px;
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(99,102,241,0.15);
+      border-radius: var(--radius); box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .port-map-title {
+      font-size: 0.9rem; font-weight: 700; color: var(--text2);
+      margin-bottom: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    }
+    .port-map-title .arrow { transition: transform 0.2s; font-size: 0.7rem; }
+    .port-map-title.open .arrow { transform: rotate(90deg); }
+    .port-map-body { display: none; }
+    .port-map-body.show { display: block; }
+    .port-map-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      font-size: 0.82rem;
+    }
+    .port-map-row {
+      display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+      background: rgba(248,250,252,0.8); border-radius: 6px;
+      border: 1px solid rgba(99,102,241,0.08);
+    }
+    .port-map-row label { font-weight: 600; color: var(--text2); min-width: 180px; font-size: 0.78rem; }
+    .port-map-row select {
+      padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(99,102,241,0.2);
+      font-size: 0.78rem; background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="wrap">
+    <div class="header">
+      <div class="keti-header">
+        <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+        <h1>ROii GCL Solver</h1>
+        <span class="engine-badge ready" id="engineBadge">&#9679; Greedy</span>
+      </div>
+      <div class="sub">8-TC Balanced Sensor Model &mdash; LAN9662 Board Integration &mdash; Greedy / ILP / Compare</div>
+    </div>
+
+    <!-- 3D Shuttle -->
+    <div class="shuttle-3d-card">
+      <div class="card-title" style="padding:16px 20px 0;">3D Shuttle Network Topology</div>
+      <div id="canvas3d"></div>
+      <div class="shuttle-3d-label">Drag to rotate &middot; Scroll to zoom &middot; Right-click to pan</div>
+    </div>
+
+    <!-- Scenario Description -->
+    <div class="auto-desc" id="scenarioDesc"></div>
+    <div class="auto-domain-legend" id="domainLegend"></div>
+
+    <!-- Solver Bar -->
+    <div class="solver-bar">
+      <button class="btn-case active" id="btnGreedy">Greedy</button>
+      <button class="btn-case" id="btnILP">ILP</button>
+      <button class="btn-compare" id="btnCompare">Compare</button>
+      <div id="status" style="font-size:0.82rem;margin-left:auto;"></div>
+    </div>
+
+    <!-- Board Toolbar -->
+    <div class="board-toolbar">
+      <div class="board-status">
+        <span class="board-dot" id="boardDot"></span>
+        <span id="boardLabel">Board: checking...</span>
+      </div>
+      <button class="btn-yaml" id="btnExportYAML" disabled>Export YAML</button>
+      <button class="btn-board" id="btnPushBoard" disabled>Push to Board</button>
+      <div class="board-log" id="boardLog"></div>
+    </div>
+
+    <!-- Port Mapping Panel -->
+    <div class="port-map-panel">
+      <div class="port-map-title" id="portMapToggle">
+        <span class="arrow">&#9654;</span> Port Mapping (SW_REAR &rarr; LAN9662)
+      </div>
+      <div class="port-map-body" id="portMapBody">
+        <p style="font-size:0.78rem;color:var(--text3);margin-bottom:10px;">
+          Map solver egress links to physical board ports. Only SW_REAR links are mapped (single test board).
+        </p>
+        <div class="port-map-grid" id="portMapGrid"></div>
+      </div>
+    </div>
+
+    <!-- Compare Area (hidden by default) -->
+    <div id="compareArea" style="display:none;"></div>
+
+    <!-- PCP Assignment Table -->
+    <div class="card">
+      <div class="card-title">PCP &rarr; TC Assignment (8-TC Dedicated)</div>
+      <table class="pcp-table">
+        <thead><tr>
+          <th>PCP</th><th>TC</th><th>Flow</th><th>Type</th><th>Payload</th><th>Period</th><th>Tx Time</th>
+        </tr></thead>
+        <tbody>
+          <tr><td><span class="pcp-badge hi">7</span></td><td>TC7</td><td>f_lidar_fc</td><td><span style="color:#F28E2B">LiDAR G32</span></td><td>1248 B</td><td>500 &micro;s</td><td>10.288 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge hi">6</span></td><td>TC6</td><td>f_lidar_fl</td><td><span style="color:#E9C46A">LiDAR Pandar</span></td><td>812 B</td><td>500 &micro;s</td><td>6.800 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge hi">5</span></td><td>TC5</td><td>f_lidar_fr</td><td><span style="color:#E76F51">LiDAR Pandar</span></td><td>812 B</td><td>500 &micro;s</td><td>6.800 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge hi">4</span></td><td>TC4</td><td>f_lidar_r</td><td><span style="color:#D4A574">LiDAR G32</span></td><td>1248 B</td><td>1000 &micro;s</td><td>10.288 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge mid">3</span></td><td>TC3</td><td>f_radar_f</td><td><span style="color:#457B9D">Radar MRR</span></td><td>128 B</td><td>500 &micro;s</td><td>1.328 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge mid">2</span></td><td>TC2</td><td>f_radar_flc</td><td><span style="color:#76B7B2">Radar MRR</span></td><td>128 B</td><td>1000 &micro;s</td><td>1.328 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge mid">1</span></td><td>TC1</td><td>f_radar_frc + f_radar_rlc</td><td><span style="color:#2A9D8F">Radar MRR &times;2</span></td><td>128 B ea</td><td>1000 &micro;s</td><td>1.328 &micro;s</td></tr>
+          <tr><td><span class="pcp-badge lo">0</span></td><td>TC0</td><td>f_radar_rrc + BG</td><td><span style="color:#264653">Radar + BG</span></td><td>128/500 B</td><td>1000/500 &micro;s</td><td>1.328/4.304 &micro;s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Network Topology -->
+    <div class="card">
+      <div class="card-title">Network Topology &mdash; All 1 Gbps Links</div>
+      <div class="legend" id="topoLegend"></div>
+      <div class="svg-container" id="topoContainer" style="height:580px;"></div>
+    </div>
+
+    <!-- Metrics -->
+    <div class="metrics" id="metricsArea"></div>
+
+    <!-- Per-Switch GCL -->
+    <div class="card">
+      <div class="card-title">Per-Switch GCL &mdash; Gate Control by Egress Port</div>
+    </div>
+    <div id="switchGclArea" class="gcl-switch-grid"></div>
+
+    <!-- Board Configuration (LAN9662) -->
+    <div class="card" id="boardConfigCard">
+      <div class="card-title">Board Configuration (LAN9662 GCL)</div>
+      <div id="boardConfigPanel"></div>
+    </div>
+
+    <!-- GCL Gantt -->
+    <div class="card">
+      <div class="card-title">Per-Link GCL Timeline (Gantt)</div>
+      <div class="legend" id="gclLegend"></div>
+      <div class="svg-container" id="gclContainer"></div>
+    </div>
+
+    <!-- Delay + Utilization -->
+    <div class="two-col">
+      <div class="card">
+        <div class="card-title">Packet E2E Delay</div>
+        <div class="svg-container" id="delayContainer" style="height:380px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Link Utilization</div>
+        <div class="svg-container" id="utilContainer" style="min-height:200px;"></div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+      <div class="card-title">Packet Schedule Table</div>
+      <div style="overflow-x:auto;">
+        <table class="pkt-table">
+          <thead><tr>
+            <th>Packet</th><th>Flow</th><th>Route</th><th>Release</th><th>End</th><th>E2E</th><th>Deadline</th><th>Slack</th><th>Status</th>
+          </tr></thead>
+          <tbody id="pktTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="card" style="padding:12px 20px;">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <a href="index.html" class="btn btn-secondary" style="font-size:0.78rem;">Home</a>
+      </div>
+    </div>
+
+    <!-- Raw GCL JSON -->
+    <div class="card">
+      <div class="card-title collapsible" id="gclJsonToggle">
+        <span class="arrow">&#9654;</span> Raw GCL Output (JSON)
+      </div>
+      <div class="collapse-body">
+        <pre id="jsonOut">-</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="vendor/d3.min.js"></script>
+  <script type="module">
+  import {
+    initTooltip, solveGreedy, solveILP, generateKPaths,
+    renderMetrics, renderTopology,
+    renderGCL, renderDelayChart, renderUtilization, renderTable, renderSwitchGCL
+  } from './js/ilp-core.js';
+
+  /* ═══════════════════════════════════════════════
+     SELF-CONTAINED MODEL — No roii-real-data.js
+     ═══════════════════════════════════════════════ */
+
+  const NODES = [
+    { id: "LIDAR_FC",  type: "endstation" },
+    { id: "LIDAR_FL",  type: "endstation" },
+    { id: "LIDAR_FR",  type: "endstation" },
+    { id: "LIDAR_R",   type: "endstation" },
+    { id: "RADAR_F",   type: "endstation" },
+    { id: "RADAR_FLC", type: "endstation" },
+    { id: "RADAR_FRC", type: "endstation" },
+    { id: "RADAR_RLC", type: "endstation" },
+    { id: "RADAR_RRC", type: "endstation" },
+    { id: "SW_FL",   type: "switch" },
+    { id: "SW_FR",   type: "switch" },
+    { id: "SW_REAR", type: "switch" },
+    { id: "ACU_IT",  type: "endstation" }
+  ];
+
+  const LINKS = [
+    { id: "l_lidarfc_swfl",   from: "LIDAR_FC",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarfl_swfl",   from: "LIDAR_FL",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarflc_swfl",  from: "RADAR_FLC", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarf_swfr",    from: "RADAR_F",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarfr_swfr",   from: "LIDAR_FR",  to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarfrc_swfr",  from: "RADAR_FRC", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarr_swrear",  from: "LIDAR_R",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarrlc_swrear",from: "RADAR_RLC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarrrc_swrear",from: "RADAR_RRC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swfl_swfr",    from: "SW_FL",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swfr_swfl",    from: "SW_FR",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swfl_swrear",  from: "SW_FL",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swrear_swfl",  from: "SW_REAR", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swfr_swrear",  from: "SW_FR",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swrear_swfr",  from: "SW_REAR", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swrear_acu",   from: "SW_REAR", to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 }
+  ];
+
+  const FLOWS = [
+    { id: "f_lidar_fc",  priority: 7, payload_bytes: 1248, period_us: 500,  deadline_us: 1000,
+      traffic_type: "lidar", src: "LIDAR_FC",  dst: "ACU_IT", k_paths: 1 },
+    { id: "f_lidar_fl",  priority: 6, payload_bytes: 812,  period_us: 500,  deadline_us: 1000,
+      traffic_type: "lidar", src: "LIDAR_FL",  dst: "ACU_IT", k_paths: 1 },
+    { id: "f_lidar_fr",  priority: 5, payload_bytes: 812,  period_us: 500,  deadline_us: 1000,
+      traffic_type: "lidar", src: "LIDAR_FR",  dst: "ACU_IT", k_paths: 1 },
+    { id: "f_lidar_r",   priority: 4, payload_bytes: 1248, period_us: 1000, deadline_us: 1000,
+      traffic_type: "lidar", src: "LIDAR_R",   dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_f",   priority: 3, payload_bytes: 128,  period_us: 500,  deadline_us: 1000,
+      traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_flc", priority: 2, payload_bytes: 128,  period_us: 1000, deadline_us: 1000,
+      traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_frc", priority: 1, payload_bytes: 128,  period_us: 1000, deadline_us: 1000,
+      traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_rlc", priority: 1, payload_bytes: 128,  period_us: 1000, deadline_us: 1000,
+      traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_rrc", priority: 0, payload_bytes: 128,  period_us: 1000, deadline_us: 1000,
+      traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_bg_1",      priority: 0, payload_bytes: 500,  period_us: 500,  deadline_us: 1000,
+      traffic_type: "bg", src: "SW_FL",  dst: "ACU_IT", k_paths: 1 },
+    { id: "f_bg_2",      priority: 0, payload_bytes: 500,  period_us: 1000, deadline_us: 1000,
+      traffic_type: "bg", src: "SW_FR",  dst: "ACU_IT", k_paths: 1 }
+  ];
+
+  const TOPOLOGY = {
+    cycle_time_us: 500,
+    guard_band_us: 1,
+    processing_delay_us: 3,
+    no_be: true,
+    nodes: JSON.parse(JSON.stringify(NODES)),
+    links: JSON.parse(JSON.stringify(LINKS)),
+    flows: JSON.parse(JSON.stringify(FLOWS))
+  };
+
+  const SWITCHES = [
+    { id: "SW_FL",   label: "Front-Left ZC (LAN9692)",  chip: "LAN9692", color: "#6366F1" },
+    { id: "SW_FR",   label: "Front-Right ZC (LAN9692)", chip: "LAN9692", color: "#6366F1" },
+    { id: "SW_REAR", label: "Rear Gateway (LAN9692)",   chip: "LAN9692", color: "#818CF8" }
+  ];
+
+  const FLOW_COLORS = {
+    f_lidar_fc:  '#F28E2B', f_lidar_fl:  '#E9C46A', f_lidar_fr:  '#E76F51', f_lidar_r:   '#D4A574',
+    f_radar_f:   '#457B9D', f_radar_flc: '#76B7B2', f_radar_frc: '#2A9D8F', f_radar_rlc: '#7B68AE',
+    f_radar_rrc: '#264653', f_bg_1:      '#ADB5BD', f_bg_2:      '#CED4DA'
+  };
+
+  function v21FlowColor(fid) {
+    return FLOW_COLORS[fid] || FLOW_COLORS[(fid || '').replace(/_p\d+$/, '')] || '#6366F1';
+  }
+
+  const NODE_COLORS = {
+    LIDAR_FC:  { fill: "#fde8cd", stroke: "#F28E2B", label: "G32 FC",       shortLabel: "G32" },
+    LIDAR_FL:  { fill: "#fdf3d7", stroke: "#E9C46A", label: "Pandar FL",    shortLabel: "PND" },
+    LIDAR_FR:  { fill: "#fce4db", stroke: "#E76F51", label: "Pandar FR",    shortLabel: "PND" },
+    LIDAR_R:   { fill: "#f0e0d0", stroke: "#D4A574", label: "G32 Rear",     shortLabel: "G32" },
+    RADAR_F:   { fill: "#d4e6f1", stroke: "#457B9D", label: "MRR-35 F",     shortLabel: "MRR" },
+    RADAR_FLC: { fill: "#d8eeec", stroke: "#76B7B2", label: "MRR-35 FLC",   shortLabel: "MRR" },
+    RADAR_FRC: { fill: "#d0ebe7", stroke: "#2A9D8F", label: "MRR-35 FRC",   shortLabel: "MRR" },
+    RADAR_RLC: { fill: "#e0d8f0", stroke: "#7B68AE", label: "MRR-35 RLC",   shortLabel: "MRR" },
+    RADAR_RRC: { fill: "#c8d5d8", stroke: "#264653", label: "MRR-35 RRC",   shortLabel: "MRR" },
+    SW_FL:     { fill: "#e0e7ff", stroke: "#6366F1", label: "Front-L ZC",   shortLabel: "LAN9692" },
+    SW_FR:     { fill: "#e0e7ff", stroke: "#6366F1", label: "Front-R ZC",   shortLabel: "LAN9692" },
+    SW_REAR:   { fill: "#ede9fe", stroke: "#818CF8", label: "Rear GW",      shortLabel: "LAN9692" },
+    ACU_IT:    { fill: "#fee2e2", stroke: "#dc2626", label: "ACU-IT",       shortLabel: "ECU" }
+  };
+
+  function getPositions(W, H) {
+    return {
+      LIDAR_FC:  { x: W * 0.35, y: H * 0.04 }, RADAR_F:   { x: W * 0.65, y: H * 0.04 },
+      RADAR_FLC: { x: W * 0.08, y: H * 0.18 }, LIDAR_FL:  { x: W * 0.28, y: H * 0.18 },
+      LIDAR_FR:  { x: W * 0.72, y: H * 0.18 }, RADAR_FRC: { x: W * 0.92, y: H * 0.18 },
+      SW_FL:     { x: W * 0.30, y: H * 0.38 }, SW_FR:     { x: W * 0.70, y: H * 0.38 },
+      SW_REAR:   { x: W * 0.50, y: H * 0.56 },
+      RADAR_RLC: { x: W * 0.15, y: H * 0.72 }, LIDAR_R:   { x: W * 0.50, y: H * 0.72 },
+      RADAR_RRC: { x: W * 0.85, y: H * 0.72 },
+      ACU_IT:    { x: W * 0.50, y: H * 0.90 }
+    };
+  }
+
+  function getDeviceType(nodeId) {
+    if (nodeId === 'LIDAR_FC' || nodeId === 'LIDAR_R') return 'lidar_g32';
+    if (nodeId === 'LIDAR_FL' || nodeId === 'LIDAR_FR') return 'lidar_pandar';
+    if (nodeId.startsWith('RADAR')) return 'radar';
+    if (nodeId === 'SW_REAR') return 'switch_r';
+    if (nodeId.startsWith('SW')) return 'switch_f';
+    return 'ecu';
+  }
+
+  const POS_3D = {
+    LIDAR_FC:   { x:  0,    y: 5.5,  z: 18.5 }, LIDAR_FL:   { x: -8.5,  y: 10,   z: 16.2 },
+    LIDAR_FR:   { x:  8.5,  y: 10,   z: 16.2 }, LIDAR_R:    { x:  0,    y: 5.5,  z:-18.5 },
+    RADAR_F:    { x:  0,    y: 7,    z: 18.5 }, RADAR_FLC:  { x: -7,    y: 6.5,  z: 17.5 },
+    RADAR_FRC:  { x:  7,    y: 6.5,  z: 17.5 }, RADAR_RLC:  { x: -7,    y: 6.5,  z:-18   },
+    RADAR_RRC:  { x:  7,    y: 6.5,  z:-18   },
+    SW_FL:      { x: -4,    y: 2,    z: 10   }, SW_FR:      { x:  4,    y: 2,    z: 10   },
+    SW_REAR:    { x:  0,    y: 2,    z: -8   }, ACU_IT:     { x:  0,    y: 2,    z:-15   }
+  };
+  const TILTS_3D = {
+    RADAR_FLC: { y: -Math.PI / 6 }, RADAR_FRC: { y:  Math.PI / 6 },
+    RADAR_RLC: { y:  Math.PI / 6 }, RADAR_RRC: { y: -Math.PI / 6 }
+  };
+  const LABELS_3D = {
+    LIDAR_FC:  'G32-FC',      LIDAR_FL:  'PND-FL',     LIDAR_FR:  'PND-FR',      LIDAR_R:   'G32-Rear',
+    RADAR_F:   'MRR35-F',     RADAR_FLC: 'MRR35-FLC',  RADAR_FRC: 'MRR35-FRC',   RADAR_RLC: 'MRR35-RLC',
+    RADAR_RRC: 'MRR35-RRC',
+    SW_FL:     'Front-L ZC',  SW_FR:     'Front-R ZC',  SW_REAR:   'Rear-GW',     ACU_IT:    'ACU-IT'
+  };
+
+  const SCENARIO = {
+    title: "ROii GCL Solver &mdash; Balanced 3-3-3 Sensor Model",
+    description: "Balanced sensor-to-switch wiring: <strong>3 sensors per zone switch</strong>. SW_FL gets left-zone sensors (LIDAR_FC, LIDAR_FL, RADAR_FLC), SW_FR gets right-zone (RADAR_F, LIDAR_FR, RADAR_FRC), SW_REAR gets rear (LIDAR_R, RADAR_RLC, RADAR_RRC). 500\u00b5s cycle, 1000\u00b5s deadline, 13 ST + 3 BG pkts/cycle. Warm LiDAR / cool radar color scheme.",
+    flows: [
+      { name: "G32 FC \u2192 ACU-IT",      color: "#F28E2B", desc: "1248B \u00d72pkts, PCP 7 (TC7), 500\u00b5s period" },
+      { name: "Pandar FL \u2192 ACU-IT",    color: "#E9C46A", desc: "812B \u00d72pkts, PCP 6 (TC6), 500\u00b5s period" },
+      { name: "Pandar FR \u2192 ACU-IT",    color: "#E76F51", desc: "812B \u00d72pkts, PCP 5 (TC5), 500\u00b5s period" },
+      { name: "G32 Rear \u2192 ACU-IT",     color: "#D4A574", desc: "1248B \u00d71pkt, PCP 4 (TC4), 1000\u00b5s period" },
+      { name: "MRR-35 F \u2192 ACU-IT",     color: "#457B9D", desc: "128B \u00d72pkts, PCP 3 (TC3), 500\u00b5s period" },
+      { name: "MRR-35 FLC \u2192 ACU-IT",   color: "#76B7B2", desc: "128B \u00d71pkt, PCP 2 (TC2), 1000\u00b5s period" },
+      { name: "MRR-35 FRC \u2192 ACU-IT",   color: "#2A9D8F", desc: "128B \u00d71pkt, PCP 1 (TC1), 1000\u00b5s period" },
+      { name: "MRR-35 RLC \u2192 ACU-IT",   color: "#7B68AE", desc: "128B \u00d71pkt, PCP 1 (TC1), 1000\u00b5s period" },
+      { name: "MRR-35 RRC \u2192 ACU-IT",   color: "#264653", desc: "128B \u00d71pkt, PCP 0 (TC0), 1000\u00b5s period" },
+      { name: "BG Infotainment",             color: "#ADB5BD", desc: "500B, PCP 0, 500\u00b5s period" },
+      { name: "BG Diagnostics",              color: "#CED4DA", desc: "500B, PCP 0, 1000\u00b5s period" }
+    ],
+    domains: [
+      { name: "LiDAR (Warm \u2014 TC7-TC4)",     color: "#F28E2B" },
+      { name: "Radar (Cool \u2014 TC3-TC0)",      color: "#457B9D" },
+      { name: "Background",                       color: "#ADB5BD" },
+      { name: "LAN9692 Backbone",                 color: "#6366F1" },
+      { name: "ACU-IT Processing",                color: "#dc2626" }
+    ]
+  };
+
+  /* ═══════════════════════════════════════════════
+     Render Options & Helpers
+     ═══════════════════════════════════════════════ */
+  const fcopts = { flowColorFn: v21FlowColor, beColor: '#e2e8f0', beBorder: 'rgba(99,102,241,0.15)' };
+  const deep = o => JSON.parse(JSON.stringify(o));
+
+  let activeSolver = 'greedy';
+  let currentModel = null;
+  let currentResult = null;
+  let glpkInstance = null;
+  let boardConnected = false;
+
+  initTooltip();
+
+  document.getElementById("gclJsonToggle").addEventListener("click", function() {
+    this.classList.toggle("open");
+    this.parentElement.querySelector(".collapse-body").classList.toggle("show");
+  });
+
+  const statusEl = document.getElementById("status");
+
+  /* ── Scenario Description ── */
+  function renderScenarioDesc() {
+    document.getElementById("scenarioDesc").innerHTML = `
+      <h3>${SCENARIO.title}</h3>
+      <p>${SCENARIO.description}</p>
+      <ul class="auto-flow-list">
+        ${SCENARIO.flows.map(f => `<li><span class="dot" style="background:${f.color}"></span><strong>${f.name}</strong> &mdash; ${f.desc}</li>`).join("")}
+      </ul>
+    `;
+    document.getElementById("domainLegend").innerHTML = SCENARIO.domains.map(d =>
+      `<div class="domain-tag"><span class="dsq" style="background:${d.color}"></span>${d.name}</div>`
+    ).join("");
+  }
+
+  /* ── Board Config Renderer ── */
+  function renderBoardConfig(boardConfigs) {
+    const panel = document.getElementById('boardConfigPanel');
+    if (!panel || !boardConfigs) return;
+    panel.innerHTML = '';
+
+    const switchColors = { SW_FL: '#6366F1', SW_FR: '#6366F1', SW_REAR: '#818CF8' };
+    const switchLabels = { SW_FL: 'Front-Left ZC (LAN9692)', SW_FR: 'Front-Right ZC (LAN9692)', SW_REAR: 'Rear Gateway (LAN9692)' };
+
+    for (const [swId, swCfg] of Object.entries(boardConfigs)) {
+      const sec = document.createElement('div');
+      sec.className = 'board-section';
+      const color = switchColors[swId] || '#6366F1';
+      sec.innerHTML = `<div class="board-section-title">
+        <div class="sw-dot" style="background:${color}"></div>
+        ${switchLabels[swId] || swId}
+        <span style="font-size:0.72rem;color:var(--text3);font-weight:400;margin-left:auto;">
+          Cycle: ${swCfg.cycle_time_us} \u00b5s | Guard: ${swCfg.guard_band_us} \u00b5s${swCfg.no_be ? ' | No BE' : ''}
+        </span>
+      </div>`;
+
+      for (const [linkId, portCfg] of Object.entries(swCfg.ports)) {
+        const portDiv = document.createElement('div');
+        portDiv.className = 'board-port';
+        let portHdr = `<div class="board-port-header">
+          Egress: ${swId} \u2192 ${portCfg.to}
+          <span class="rate-badge">${portCfg.rate_mbps} Mbps</span>
+          <span class="board-summary">${portCfg.entries.length} GCL entries</span>
+        </div>`;
+        let tableHtml = `<table class="gcl-board-table">
+          <thead><tr><th>#</th><th>Gate Mask</th><th>Start (\u00b5s)</th><th>End (\u00b5s)</th><th>Duration (\u00b5s)</th><th>Note</th></tr></thead><tbody>`;
+        for (const e of portCfg.entries) {
+          const bits = e.gate_mask.split('').map((b, i) => {
+            const tc = 7 - i;
+            const cls = b === '1' ? 'open' : 'closed';
+            return `<span class="gate-bit ${cls}" title="TC${tc}">${b}</span>`;
+          }).join('');
+          let noteStyle = '';
+          if (e.note.includes('guard')) noteStyle = 'style="color:var(--orange)"';
+          else if (e.note.includes('all-gates-closed') || e.note.includes('best-effort')) noteStyle = 'style="color:var(--text3)"';
+          tableHtml += `<tr>
+            <td>${e.index}</td>
+            <td><span class="gate-bits">${bits}</span></td>
+            <td>${e.start_us.toFixed(3)}</td>
+            <td>${e.end_us.toFixed(3)}</td>
+            <td>${e.duration_us.toFixed(3)}</td>
+            <td ${noteStyle}>${e.note}</td>
+          </tr>`;
+        }
+        tableHtml += '</tbody></table>';
+        let pcpHtml = '';
+        if (portCfg.pcps_used.length > 0) {
+          pcpHtml = '<div class="pcp-map">';
+          for (const p of portCfg.pcps_used) {
+            pcpHtml += `<span class="pcp-tag">PCP ${p} \u2192 TC${portCfg.pcp_to_queue[p]}</span>`;
+          }
+          pcpHtml += '</div>';
+        }
+        portDiv.innerHTML = portHdr + tableHtml + pcpHtml;
+        sec.appendChild(portDiv);
+      }
+      panel.appendChild(sec);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════
+     Solve & Render
+     ═══════════════════════════════════════════════ */
+  function renderAll(model, result, wallMs, method) {
+    currentModel = model;
+    currentResult = result;
+
+    const W = document.getElementById("topoContainer").clientWidth;
+    renderMetrics(model, result);
+    renderTopology(model, result, {
+      nodePositions: getPositions(W, 580),
+      nodeColors: NODE_COLORS,
+      height: 580
+    });
+    renderSwitchGCL(model, result, { switches: SWITCHES, flowColorFn: v21FlowColor });
+    renderBoardConfig(result.boardConfigs);
+    renderGCL(model, result, fcopts);
+    renderDelayChart(model, result, fcopts);
+    renderUtilization(model, result, { beColor: '#e2e8f0' });
+    renderTable(result, fcopts);
+    document.getElementById("jsonOut").textContent = JSON.stringify(result.gcl, null, 2);
+
+    statusEl.innerHTML = `<strong style="color:var(--green)">${method} solved in ${wallMs}ms</strong> &mdash; ${result.packetRows.length} packets`;
+    statusEl.className = "status-ok";
+
+    document.getElementById("compareArea").style.display = 'none';
+
+    // Enable board buttons after solve
+    document.getElementById("btnExportYAML").disabled = false;
+    updatePushButton();
+  }
+
+  function runGreedy() {
+    try {
+      const model = deep(TOPOLOGY);
+      const t0 = performance.now();
+      const result = solveGreedy(model);
+      const wallMs = Math.round(performance.now() - t0);
+      renderAll(model, result, wallMs, 'Greedy');
+    } catch (e) {
+      statusEl.textContent = "Error: " + e.message;
+      statusEl.className = "status-err";
+      console.error(e);
+    }
+  }
+
+  async function runILP() {
+    if (!glpkInstance) {
+      statusEl.innerHTML = '<span style="color:var(--orange)">Loading GLPK...</span>';
+      return;
+    }
+    try {
+      const model = deep(TOPOLOGY);
+      const t0 = performance.now();
+      const result = await solveILP(model, glpkInstance, { tmlim: 15 });
+      const wallMs = Math.round(performance.now() - t0);
+      renderAll(model, result, wallMs, 'ILP');
+    } catch (e) {
+      statusEl.textContent = "ILP Error: " + e.message;
+      statusEl.className = "status-err";
+      console.error(e);
+    }
+  }
+
+  async function runCompare() {
+    if (!glpkInstance) {
+      statusEl.innerHTML = '<span style="color:var(--orange)">Loading GLPK for comparison...</span>';
+      return;
+    }
+    try {
+      const modelG = deep(TOPOLOGY);
+      const t0g = performance.now();
+      const resG = solveGreedy(modelG);
+      const msG = Math.round(performance.now() - t0g);
+
+      const modelI = deep(TOPOLOGY);
+      const t0i = performance.now();
+      const resI = await solveILP(modelI, glpkInstance, { tmlim: 15 });
+      const msI = Math.round(performance.now() - t0i);
+
+      const area = document.getElementById("compareArea");
+      area.style.display = 'block';
+
+      function getStats(res) {
+        const delays = res.packetRows.map(r => r.e2e);
+        const maxDelay = Math.max(...delays);
+        const avgDelay = delays.reduce((a, b) => a + b, 0) / delays.length;
+        const feasible = res.packetRows.every(r => r.slack >= 0);
+        const maxUtil = Math.max(...Object.values(res.linkUtilization || {}).map(u => u.total || 0));
+        return { maxDelay, avgDelay, feasible, maxUtil, pkts: res.packetRows.length };
+      }
+
+      const sg = getStats(resG), si = getStats(resI);
+
+      function w(gVal, iVal, lowerBetter = true) {
+        if (lowerBetter) return gVal <= iVal ? ['compare-winner', ''] : ['', 'compare-winner'];
+        return gVal >= iVal ? ['compare-winner', ''] : ['', 'compare-winner'];
+      }
+
+      const [wgD, wiD] = w(sg.maxDelay, si.maxDelay);
+      const [wgA, wiA] = w(sg.avgDelay, si.avgDelay);
+      const [wgU, wiU] = w(sg.maxUtil, si.maxUtil);
+
+      area.innerHTML = `<div class="compare-grid">
+        <div class="compare-panel">
+          <h3 style="color:#F28E2B;">Greedy <span style="font-weight:400;font-size:0.8rem;color:var(--text3)">(${msG}ms)</span></h3>
+          <div class="compare-metric"><span class="label">Packets</span><span class="value">${sg.pkts}</span></div>
+          <div class="compare-metric"><span class="label">Max Delay</span><span class="value ${wgD}">${sg.maxDelay.toFixed(2)} \u00b5s</span></div>
+          <div class="compare-metric"><span class="label">Avg Delay</span><span class="value ${wgA}">${sg.avgDelay.toFixed(2)} \u00b5s</span></div>
+          <div class="compare-metric"><span class="label">Max Util</span><span class="value ${wgU}">${(sg.maxUtil * 100).toFixed(1)}%</span></div>
+          <div class="compare-metric"><span class="label">Feasible</span><span class="value" style="color:${sg.feasible ? 'var(--green)' : 'var(--red)'};">${sg.feasible ? 'Yes' : 'No'}</span></div>
+        </div>
+        <div class="compare-panel">
+          <h3 style="color:#457B9D;">ILP <span style="font-weight:400;font-size:0.8rem;color:var(--text3)">(${msI}ms)</span></h3>
+          <div class="compare-metric"><span class="label">Packets</span><span class="value">${si.pkts}</span></div>
+          <div class="compare-metric"><span class="label">Max Delay</span><span class="value ${wiD}">${si.maxDelay.toFixed(2)} \u00b5s</span></div>
+          <div class="compare-metric"><span class="label">Avg Delay</span><span class="value ${wiA}">${si.avgDelay.toFixed(2)} \u00b5s</span></div>
+          <div class="compare-metric"><span class="label">Max Util</span><span class="value ${wiU}">${(si.maxUtil * 100).toFixed(1)}%</span></div>
+          <div class="compare-metric"><span class="label">Feasible</span><span class="value" style="color:${si.feasible ? 'var(--green)' : 'var(--red)'};">${si.feasible ? 'Yes' : 'No'}</span></div>
+        </div>
+      </div>`;
+
+      renderAll(modelI, resI, msI, 'Compare (ILP shown)');
+      area.style.display = 'block';
+
+      statusEl.innerHTML = `<strong style="color:var(--green)">Compared</strong> &mdash; Greedy ${msG}ms vs ILP ${msI}ms`;
+    } catch (e) {
+      statusEl.textContent = "Compare Error: " + e.message;
+      statusEl.className = "status-err";
+      console.error(e);
+    }
+  }
+
+  /* ── Button Handlers ── */
+  const btnGreedy = document.getElementById("btnGreedy");
+  const btnILP = document.getElementById("btnILP");
+  const btnCompare = document.getElementById("btnCompare");
+
+  function setActive(btn) {
+    btnGreedy.classList.remove('active');
+    btnILP.classList.remove('active');
+    if (btn) btn.classList.add('active');
+  }
+
+  btnGreedy.addEventListener("click", () => {
+    activeSolver = 'greedy'; setActive(btnGreedy);
+    document.getElementById("engineBadge").textContent = '\u25CF Greedy';
+    runGreedy();
+  });
+  btnILP.addEventListener("click", () => {
+    activeSolver = 'ilp'; setActive(btnILP);
+    document.getElementById("engineBadge").textContent = '\u25CF ILP';
+    runILP();
+  });
+  btnCompare.addEventListener("click", () => {
+    setActive(null);
+    document.getElementById("engineBadge").textContent = '\u25CF Compare';
+    runCompare();
+  });
+
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (activeSolver === 'greedy') runGreedy();
+      else if (activeSolver === 'ilp') runILP();
+    }, 300);
+  });
+
+  async function ensureGLPK() {
+    if (glpkInstance) return;
+    const badge = document.getElementById("engineBadge");
+    badge.className = "engine-badge loading";
+    badge.textContent = "\u25CF Loading GLPK...";
+    try {
+      const GLPK = (await import('./vendor/glpk.js')).default;
+      glpkInstance = await GLPK();
+      badge.className = "engine-badge ready";
+      badge.textContent = "\u25CF " + (activeSolver === 'greedy' ? 'Greedy' : 'ILP');
+    } catch (e) {
+      console.warn("GLPK load failed:", e);
+      badge.className = "engine-badge ready";
+      badge.textContent = "\u25CF Greedy (no GLPK)";
+    }
+  }
+
+  /* ═══════════════════════════════════════════════
+     Board Integration
+     ═══════════════════════════════════════════════ */
+
+  // SW_REAR egress links that can be mapped to physical board ports
+  const MAPPABLE_LINKS = [
+    { linkId: 'l_swrear_acu',   label: 'SW_REAR \u2192 ACU_IT' },
+    { linkId: 'l_swrear_swfl',  label: 'SW_REAR \u2192 SW_FL' },
+    { linkId: 'l_swrear_swfr',  label: 'SW_REAR \u2192 SW_FR' }
+  ];
+
+  // Default port mapping
+  const portMap = {
+    l_swrear_acu:  '1',
+    l_swrear_swfl: '2',
+    l_swrear_swfr: 'unmapped'
+  };
+
+  function initPortMapPanel() {
+    const grid = document.getElementById('portMapGrid');
+    grid.innerHTML = '';
+    for (const ml of MAPPABLE_LINKS) {
+      const row = document.createElement('div');
+      row.className = 'port-map-row';
+      row.innerHTML = `
+        <label>${ml.label}</label>
+        <select data-link="${ml.linkId}">
+          <option value="unmapped">Unmapped</option>
+          <option value="1" ${portMap[ml.linkId] === '1' ? 'selected' : ''}>Port 1</option>
+          <option value="2" ${portMap[ml.linkId] === '2' ? 'selected' : ''}>Port 2</option>
+        </select>`;
+      grid.appendChild(row);
+    }
+    grid.addEventListener('change', e => {
+      if (e.target.tagName === 'SELECT') {
+        portMap[e.target.dataset.link] = e.target.value;
+      }
+    });
+
+    document.getElementById('portMapToggle').addEventListener('click', function() {
+      this.classList.toggle('open');
+      document.getElementById('portMapBody').classList.toggle('show');
+    });
+  }
+
+  function updatePushButton() {
+    const btn = document.getElementById('btnPushBoard');
+    btn.disabled = !currentResult || !boardConnected;
+  }
+
+  async function checkBoardStatus() {
+    const dot = document.getElementById('boardDot');
+    const label = document.getElementById('boardLabel');
+    try {
+      const res = await fetch('/api/board/status');
+      const data = await res.json();
+      boardConnected = data.connected;
+      dot.className = 'board-dot' + (data.connected ? ' connected' : '');
+      label.textContent = data.connected ? `Board: ${data.device}` : 'Board: disconnected';
+    } catch {
+      boardConnected = false;
+      dot.className = 'board-dot';
+      label.textContent = 'Board: server offline';
+    }
+    updatePushButton();
+  }
+
+  function getPortMap() {
+    const mapped = {};
+    for (const [linkId, port] of Object.entries(portMap)) {
+      if (port !== 'unmapped') mapped[linkId] = port;
+    }
+    return mapped;
+  }
+
+  async function pushToBoard() {
+    if (!currentResult || !currentResult.boardConfigs) return;
+
+    const btn = document.getElementById('btnPushBoard');
+    const log = document.getElementById('boardLog');
+    btn.classList.add('pushing');
+    btn.textContent = 'Pushing...';
+    btn.disabled = true;
+    log.textContent = '';
+
+    try {
+      const res = await fetch('/api/gcl/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boardConfigs: currentResult.boardConfigs,
+          portMap: getPortMap(),
+          device: '/dev/ttyACM0'
+        })
+      });
+      const data = await res.json();
+      if (data.error) {
+        log.innerHTML = `<span style="color:var(--red)">${data.error}</span>`;
+      } else {
+        const ok = data.results.filter(r => r.success).length;
+        const fail = data.results.filter(r => !r.success).length;
+        log.innerHTML = fail === 0
+          ? `<span style="color:var(--green)">${ok} port(s) configured</span>`
+          : `<span style="color:var(--orange)">${ok} ok, ${fail} failed</span>`;
+      }
+    } catch (e) {
+      log.innerHTML = `<span style="color:var(--red)">Push failed: ${e.message}</span>`;
+    }
+    btn.classList.remove('pushing');
+    btn.textContent = 'Push to Board';
+    updatePushButton();
+  }
+
+  async function exportYAML() {
+    if (!currentResult || !currentResult.boardConfigs) return;
+    const btn = document.getElementById('btnExportYAML');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/gcl/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          boardConfigs: currentResult.boardConfigs,
+          portMap: getPortMap()
+        })
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'tas-config.yaml';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      document.getElementById('boardLog').innerHTML =
+        `<span style="color:var(--red)">Export failed: ${e.message}</span>`;
+    }
+    btn.disabled = false;
+  }
+
+  document.getElementById('btnPushBoard').addEventListener('click', pushToBoard);
+  document.getElementById('btnExportYAML').addEventListener('click', exportYAML);
+
+  /* ═══════════════════════════════════════════════
+     3D Shuttle Visualization
+     ═══════════════════════════════════════════════ */
+  const TMPL = {
+    lidar_g32:    { w:1, h:1, d:1, color:0xF28E2B },
+    lidar_pandar: { w:1, h:1, d:1, color:0xE76F51 },
+    radar:        { w:1, h:1, d:1, color:0x457B9D },
+    switch_f:     { w:4, h:2, d:4, color:0x6366F1 },
+    switch_r:     { w:4, h:2, d:4, color:0x818CF8 },
+    ecu:          { w:4, h:2, d:4, color:0xdc2626 }
+  };
+
+  function createDevice(nodeId, position, label, tilt) {
+    const type = getDeviceType(nodeId), t = TMPL[type] || TMPL.ecu;
+    const group = new THREE.Group(); let geo;
+    if (type === 'lidar_g32') geo = new THREE.BoxGeometry(t.w,t.h,t.d);
+    else if (type === 'lidar_pandar') geo = new THREE.CylinderGeometry(t.w*0.6,t.w*0.6,t.h*0.8,16);
+    else geo = new THREE.BoxGeometry(t.w,t.h,t.d);
+    const mat = new THREE.MeshPhongMaterial({ color:t.color, emissive:t.color, emissiveIntensity:0.5, specular:0x888888, shininess:30 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow=true; mesh.receiveShadow=true; group.add(mesh);
+    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({color:0xffffff,linewidth:5})));
+    const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+    canvas.width=512; canvas.height=128;
+    ctx.fillStyle='rgba(26,26,46,0.9)'; ctx.fillRect(0,0,512,128);
+    ctx.fillStyle='#FFF'; ctx.font='bold 48px Arial'; ctx.textAlign='center'; ctx.fillText(label,256,75);
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(canvas)}));
+    const ls = Math.max(t.w,t.d)*1.2; sprite.scale.set(ls,ls*0.25,1); sprite.position.y=t.h+1; group.add(sprite);
+    group.position.copy(position);
+    if (tilt) { if(tilt.x!==undefined)group.rotation.x=tilt.x; if(tilt.y!==undefined)group.rotation.y=tilt.y; }
+    return { mesh, group };
+  }
+
+  let renderer3d = null;
+  function init3D() {
+    const container = document.getElementById('canvas3d');
+    if (!container || typeof THREE === 'undefined') return;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    scene.fog = new THREE.Fog(0xf0f0f0, 80, 250);
+    const camera = new THREE.PerspectiveCamera(60,1,0.1,1000);
+    camera.position.set(50,35,70);
+    if (renderer3d) renderer3d.dispose();
+    renderer3d = new THREE.WebGLRenderer({antialias:true});
+    renderer3d.shadowMap.enabled=true; renderer3d.shadowMap.type=THREE.PCFSoftShadowMap;
+    function updateSize(){ const w=container.clientWidth,h=container.clientHeight; camera.aspect=w/h; camera.updateProjectionMatrix(); renderer3d.setSize(w,h); }
+    updateSize(); container.appendChild(renderer3d.domElement);
+    window.addEventListener('resize', updateSize);
+    const controls = new THREE.OrbitControls(camera, renderer3d.domElement);
+    controls.enableDamping=true; controls.dampingFactor=0.05; controls.autoRotate=true; controls.autoRotateSpeed=1.2;
+    controls.minDistance=20; controls.maxDistance=120; controls.target.set(0,0,0);
+
+    scene.add(new THREE.AmbientLight(0xffffff,1.2));
+    const ml=new THREE.DirectionalLight(0xffffff,1.5); ml.position.set(30,50,30);
+    ml.castShadow=true; ml.shadow.mapSize.set(2048,2048);
+    ml.shadow.camera.near=0.5; ml.shadow.camera.far=200;
+    ml.shadow.camera.left=-60; ml.shadow.camera.right=60; ml.shadow.camera.top=60; ml.shadow.camera.bottom=-60;
+    scene.add(ml);
+    scene.add(new THREE.DirectionalLight(0xffffff,1.0)).position.set(0,50,0);
+    scene.add(new THREE.PointLight(0x6366F1,2,100)).position.set(20,15,20);
+    scene.add(new THREE.PointLight(0x818CF8,1.5,80)).position.set(-20,15,-20);
+    const grid=new THREE.GridHelper(100,50,0x6366F1,0xCCCCCC);
+    grid.material.opacity=0.4; grid.material.transparent=true; grid.position.y=-0.5; scene.add(grid);
+    const plane=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.ShadowMaterial({opacity:0.3}));
+    plane.rotation.x=-Math.PI/2; plane.position.y=-0.5; plane.receiveShadow=true; scene.add(plane);
+
+    const loader = new THREE.GLTFLoader();
+    loader.load('./roii.glb', gltf => {
+      const m=gltf.scene, box=new THREE.Box3().setFromObject(m), size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());
+      const s=40/Math.max(size.x,size.y,size.z); m.scale.set(s,s,s);
+      m.position.x=-center.x; m.position.y=-center.y+(size.y*s*0.5)+0.5; m.position.z=-center.z;
+      m.traverse(c=>{ if(!c.isMesh)return; [].concat(c.material).forEach(mt=>{mt.transparent=true;mt.opacity=0.3;mt.side=THREE.DoubleSide;mt.depthWrite=true;if(mt.color)mt.color.multiplyScalar(1.5);mt.emissive=mt.color?mt.color.clone().multiplyScalar(0.3):new THREE.Color(0xffffff);mt.emissiveIntensity=0.4;}); c.castShadow=true;c.receiveShadow=true;});
+      scene.add(m);
+    }, undefined, err => console.warn('GLB:', err));
+
+    const nodeMeshes = {};
+    for (const [id, pos] of Object.entries(POS_3D)) {
+      const v = new THREE.Vector3(pos.x, pos.y, pos.z);
+      const dev = createDevice(id, v, LABELS_3D[id]||id, TILTS_3D[id]||null);
+      scene.add(dev.group); nodeMeshes[id]=dev.mesh;
+    }
+    const drawn = new Set();
+    for (const link of LINKS) {
+      const key = [link.from,link.to].sort().join('|');
+      if (drawn.has(key)) continue; drawn.add(key);
+      const p1=POS_3D[link.from], p2=POS_3D[link.to]; if(!p1||!p2) continue;
+      const v1=new THREE.Vector3(p1.x,p1.y,p1.z), v2=new THREE.Vector3(p2.x,p2.y,p2.z);
+      const curve=new THREE.CatmullRomCurve3([v1,v2]);
+      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false), new THREE.MeshStandardMaterial({color:0x6366F1,emissive:0x6366F1,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
+      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false), new THREE.MeshBasicMaterial({color:0x6366F1,transparent:true,opacity:0.35})));
+    }
+    const clock = new THREE.Clock();
+    (function animate(){ requestAnimationFrame(animate); controls.update();
+      const pulse=Math.sin(clock.elapsedTime*2.5)*0.06;
+      for(const m of Object.values(nodeMeshes)) if(m&&m.material) m.material.emissiveIntensity=0.2+pulse;
+      renderer3d.render(scene,camera);
+    })();
+  }
+
+  /* ── Boot ── */
+  renderScenarioDesc();
+  initPortMapPanel();
+  runGreedy();
+  try { init3D(); } catch(e) { console.warn('3D:', e); }
+  ensureGLPK();
+  checkBoardStatus();
+  setInterval(checkBoardStatus, 5000);
+  </script>
+</body>
+</html>

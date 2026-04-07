@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KETI TSN &mdash; ILP Solver + LAN9662</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #f8f9fa 0%, #eef2ff 50%, #e0e7ff 100%);
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    }
+    .container {
+      max-width: 700px; width: 90%; padding: 40px 0;
+    }
+    .header {
+      text-align: center; margin-bottom: 40px;
+    }
+    .header img { height: 48px; margin-bottom: 12px; }
+    .header h1 {
+      font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #6366F1, #818CF8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .header p { color: #64748b; font-size: 0.92rem; margin-top: 8px; }
+    .cards { display: grid; gap: 16px; }
+    .card {
+      background: rgba(255,255,255,0.95); border: 1px solid rgba(99,102,241,0.15);
+      border-radius: 16px; padding: 28px 32px; text-decoration: none;
+      transition: all 0.2s; box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+      display: block; color: inherit;
+    }
+    .card:hover {
+      border-color: rgba(99,102,241,0.4);
+      box-shadow: 0 8px 30px rgba(99,102,241,0.12);
+      transform: translateY(-2px);
+    }
+    .card h2 { font-size: 1.2rem; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
+    .card p { font-size: 0.85rem; color: #64748b; line-height: 1.5; }
+    .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 6px;
+      font-size: 0.72rem; font-weight: 600; margin-top: 10px;
+    }
+    .badge-solver { background: rgba(99,102,241,0.1); color: #6366F1; }
+    .badge-board { background: rgba(5,150,105,0.1); color: #059669; }
+    .badge-cli { background: rgba(217,119,6,0.1); color: #d97706; }
+    .board-info {
+      margin-top: 32px; padding: 20px 24px;
+      background: rgba(255,255,255,0.8); border: 1px solid rgba(99,102,241,0.1);
+      border-radius: 12px; font-size: 0.82rem; color: #475569;
+    }
+    .board-info h3 { font-size: 0.9rem; font-weight: 700; color: #6366F1; margin-bottom: 8px; }
+    .board-info code { background: rgba(99,102,241,0.08); padding: 2px 6px; border-radius: 4px; font-size: 0.78rem; }
+    .status-line { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #adb5bd; }
+    .status-dot.ok { background: #059669; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+      <h1>KETI TSN Platform</h1>
+      <p>ILP/Greedy GCL Solver + LAN9662 Board Integration</p>
+    </div>
+
+    <div class="cards">
+      <a href="solver.html" class="card">
+        <h2>GCL Solver</h2>
+        <p>
+          8-TC balanced sensor model with Greedy/ILP solvers.
+          Per-switch GCL visualization, Gantt timeline, delay analysis, and board configuration output.
+          Push solved GCL directly to the LAN9662 board.
+        </p>
+        <span class="badge badge-solver">Greedy + ILP</span>
+        <span class="badge badge-board">Push to Board</span>
+      </a>
+    </div>
+
+    <div class="board-info">
+      <h3>Board Connection</h3>
+      <p>
+        LAN9662 connected via <code>/dev/ttyACM0</code> (serial/MUP1).
+        The server bridges solver output to YANG/CBOR configuration via CoAP iPATCH.
+      </p>
+      <div class="status-line">
+        <span class="status-dot" id="statusDot"></span>
+        <span id="statusText">Checking...</span>
+      </div>
+      <p style="margin-top:8px;">
+        Start: <code>bash run.sh</code> &rarr; <code>http://localhost:3000</code>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    async function checkStatus() {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      try {
+        const res = await fetch('/api/board/status');
+        const data = await res.json();
+        dot.className = 'status-dot' + (data.connected ? ' ok' : '');
+        text.textContent = data.connected ? `Connected: ${data.device}` : 'Disconnected';
+      } catch {
+        dot.className = 'status-dot';
+        text.textContent = 'Server offline';
+      }
+    }
+    checkStatus();
+    setInterval(checkStatus, 5000);
+  </script>
+</body>
+</html>
