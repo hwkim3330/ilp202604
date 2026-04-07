@@ -218,6 +218,47 @@
 
     .error-card { background: rgba(255,59,48,.04); border: 1px solid rgba(255,59,48,.12); border-radius: var(--radius); padding: 24px 32px; color: var(--red); font-weight: 500; }
 
+    /* Quick Profiles */
+    .profiles-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 24px 28px;
+      margin-bottom: 24px; box-shadow: var(--shadow);
+    }
+    .profiles-title {
+      font-size: 0.72rem; font-weight: 700; color: var(--text3);
+      text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px;
+    }
+    .profiles-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 10px;
+    }
+    .profile-btn {
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 18px; border-radius: 14px;
+      border: 1.5px solid var(--border); background: #fff;
+      cursor: pointer; transition: all .2s; text-align: left;
+    }
+    .profile-btn:hover { border-color: var(--accent); box-shadow: 0 2px 12px rgba(0,122,255,.08); }
+    .profile-btn:active { transform: scale(0.98); }
+    .profile-btn.active { border-color: var(--accent); background: rgba(0,122,255,.03); }
+    .profile-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .profile-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; flex-shrink: 0;
+    }
+    .profile-text h3 { font-size: 0.88rem; font-weight: 700; color: var(--text); }
+    .profile-text p { font-size: 0.72rem; color: var(--text3); margin-top: 2px; line-height: 1.4; }
+    .profile-applying {
+      font-size: 0.78rem; font-weight: 600; color: var(--accent);
+      display: flex; align-items: center; gap: 6px; margin-top: 12px;
+    }
+    .spinner-sm {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+
     @media (max-width: 600px) {
       .header h1 { font-size: 2rem; }
       .port-card { padding: 20px; }
@@ -241,6 +282,13 @@
     <div class="action-bar">
       <span class="read-time" id="readTime"></span>
       <button class="btn btn-primary" id="btnRead" disabled onclick="readBoard()">Read from Board</button>
+    </div>
+
+    <!-- Quick Profiles -->
+    <div class="profiles-card" id="profilesCard">
+      <div class="profiles-title">Quick Profiles</div>
+      <div class="profiles-grid" id="profilesGrid"></div>
+      <div id="profileStatus"></div>
     </div>
 
     <div id="portsContainer">
@@ -269,40 +317,97 @@
     ];
     const BE_COLOR = '#e5e5ea';
 
-    /* Presets */
+    /* Per-port presets (used in editor) */
     const PRESETS = {
       'LiDAR + BE': {
         cycleUs: 500,
         entries: [
-          { gateStates: 128, durationUs: 262.4 },   // TC7 — LiDAR (Pandar ~32KB)
-          { gateStates: 255, durationUs: 237.6 },    // All open — BE
+          { gateStates: 128, durationUs: 262.4 },
+          { gateStates: 255, durationUs: 237.6 },
         ]
       },
       'Multi-sensor': {
         cycleUs: 500,
         entries: [
-          { gateStates: 128, durationUs: 10.288 },   // TC7 — MRR radar
-          { gateStates: 1,   durationUs: 1.0 },       // TC0 — Guard band
-          { gateStates: 64,  durationUs: 6.8 },       // TC6 — Pandar LiDAR
-          { gateStates: 32,  durationUs: 6.8 },       // TC5 — G32 LiDAR
-          { gateStates: 8,   durationUs: 1.328 },     // TC3 — Camera
-          { gateStates: 255, durationUs: 473.784 },   // All — BE
+          { gateStates: 128, durationUs: 10.288 },
+          { gateStates: 1,   durationUs: 1.0 },
+          { gateStates: 64,  durationUs: 6.8 },
+          { gateStates: 32,  durationUs: 6.8 },
+          { gateStates: 8,   durationUs: 1.328 },
+          { gateStates: 255, durationUs: 473.784 },
         ]
       },
       'All Open': {
         cycleUs: 500,
-        entries: [
-          { gateStates: 255, durationUs: 500 },
-        ]
+        entries: [{ gateStates: 255, durationUs: 500 }]
       },
       'TAS Off': {
         cycleUs: 500,
-        entries: [
-          { gateStates: 255, durationUs: 500 },
-        ],
+        entries: [{ gateStates: 255, durationUs: 500 }],
         gateDisabled: true
       },
     };
+
+    /* Quick Profiles — both ports at once */
+    const PROFILES = [
+      {
+        id: 'multi-sensor',
+        name: 'Multi-sensor',
+        desc: 'Port 1: Radar+LiDAR+Camera (6 TC), Port 2: LiDAR priority',
+        icon: '\ud83d\udce1',
+        iconBg: 'linear-gradient(135deg, #e8f0fe, #d2e3fc)',
+        ports: {
+          '1': { cycleUs: 500, entries: [
+            { gateStates: 128, durationUs: 10.288 },
+            { gateStates: 1,   durationUs: 1.0 },
+            { gateStates: 64,  durationUs: 6.8 },
+            { gateStates: 32,  durationUs: 6.8 },
+            { gateStates: 8,   durationUs: 1.328 },
+            { gateStates: 255, durationUs: 473.784 },
+          ]},
+          '2': { cycleUs: 500, entries: [
+            { gateStates: 128, durationUs: 262.4 },
+            { gateStates: 255, durationUs: 237.6 },
+          ]},
+        }
+      },
+      {
+        id: 'lidar-only',
+        name: 'LiDAR Only',
+        desc: 'Both ports: TC7 LiDAR priority (52%) + Best Effort',
+        icon: '\ud83d\udd35',
+        iconBg: 'linear-gradient(135deg, #e3f2fd, #bbdefb)',
+        ports: {
+          '1': { cycleUs: 500, entries: [
+            { gateStates: 128, durationUs: 262.4 },
+            { gateStates: 255, durationUs: 237.6 },
+          ]},
+          '2': { cycleUs: 500, entries: [
+            { gateStates: 128, durationUs: 262.4 },
+            { gateStates: 255, durationUs: 237.6 },
+          ]},
+        }
+      },
+      {
+        id: 'all-open',
+        name: 'All Open',
+        desc: 'No TAS shaping \u2014 all traffic classes pass freely',
+        icon: '\ud83d\udd13',
+        iconBg: 'linear-gradient(135deg, #e8f5e9, #c8e6c9)',
+        ports: {
+          '1': { cycleUs: 500, entries: [{ gateStates: 255, durationUs: 500 }] },
+          '2': { cycleUs: 500, entries: [{ gateStates: 255, durationUs: 500 }] },
+        }
+      },
+      {
+        id: 'custom',
+        name: 'Custom',
+        desc: 'Use the editor on each port card to build your own config',
+        icon: '\u2699\ufe0f',
+        iconBg: 'linear-gradient(135deg, #f3e5f5, #e1bee7)',
+        action: 'edit'
+      },
+    ];
 
     /* ══════════════════════════════════════════
        State
@@ -342,6 +447,77 @@
     }
     checkStatus().then(() => { if (boardConnected) readBoard(); });
     setInterval(checkStatus, 5000);
+
+    /* ══════════════════════════════════════════
+       Quick Profiles
+       ══════════════════════════════════════════ */
+    let activeProfile = null;
+    let applyingProfile = false;
+
+    function renderProfiles() {
+      const grid = document.getElementById('profilesGrid');
+      grid.innerHTML = '';
+      for (const p of PROFILES) {
+        const btn = document.createElement('button');
+        btn.className = 'profile-btn' + (activeProfile === p.id ? ' active' : '');
+        btn.disabled = !boardConnected || applyingProfile;
+        btn.onclick = () => p.action === 'edit' ? scrollToEdit() : applyProfile(p);
+        btn.innerHTML = `
+          <div class="profile-icon" style="background:${p.iconBg}">${p.icon}</div>
+          <div class="profile-text">
+            <h3>${p.name}</h3>
+            <p>${p.desc}</p>
+          </div>`;
+        grid.appendChild(btn);
+      }
+    }
+    renderProfiles();
+
+    function scrollToEdit() {
+      const first = document.querySelector('.port-card');
+      if (first) {
+        const portNum = first.id.replace('port-card-', '');
+        if (portNum && lastPortsData[portNum]) startEdit(portNum);
+      }
+    }
+
+    async function applyProfile(profile) {
+      if (applyingProfile || !boardConnected) return;
+      applyingProfile = true;
+      activeProfile = profile.id;
+      renderProfiles();
+
+      const status = document.getElementById('profileStatus');
+      status.innerHTML = `<div class="profile-applying"><span class="spinner-sm"></span> Applying ${profile.name}...</div>`;
+
+      const portNums = Object.keys(profile.ports);
+      let allOk = true;
+
+      for (const pn of portNums) {
+        const cfg = profile.ports[pn];
+        try {
+          const res = await fetch('/api/gcl/push-port', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ port: pn, cycleUs: cfg.cycleUs, entries: cfg.entries })
+          });
+          const data = await res.json();
+          if (!data.success) { allOk = false; showToast(`Port ${pn} failed: ${data.error || 'unknown'}`, 'err'); }
+        } catch (e) {
+          allOk = false;
+          showToast(`Port ${pn} error: ${e.message}`, 'err');
+        }
+      }
+
+      applyingProfile = false;
+      status.innerHTML = '';
+
+      if (allOk) {
+        showToast(`${profile.name} applied to all ports`, 'ok');
+        readBoard();
+      }
+      renderProfiles();
+    }
 
     /* ══════════════════════════════════════════
        Read Board
