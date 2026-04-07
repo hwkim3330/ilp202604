@@ -161,7 +161,8 @@ function buildResult(model, pkts, schedHops, method, stats) {
   }
   const outStats = { ...(stats || {}), overlap_conflicts: overlapConflicts };
 
-  // Generate per-switch board configs
+  // Generate per-switch board configs (max 8 entries per port for LAN9662/LAN9692)
+  const MAX_GCL_ENTRIES = 8;
   const switchNodes = model.nodes.filter(n => n.type === 'switch').map(n => n.id);
   let boardConfigs = null;
   if (switchNodes.length > 0) {
@@ -170,23 +171,64 @@ function buildResult(model, pkts, schedHops, method, stats) {
       const egressLinks = model.links.filter(l => l.from === swId);
       const ports = {};
       for (const el of egressLinks) {
-        const gclEntries = gcl.links[el.id]?.entries || [];
+        const rawEntries = gcl.links[el.id]?.entries || [];
+        // Compact entries: remove guard bands, merge consecutive same-mask,
+        // then merge smallest gaps to fit within MAX_GCL_ENTRIES
+        let compact = [];
+        for (const e of rawEntries) {
+          if (e.note.includes('guard')) continue; // skip guard bands
+          if (compact.length > 0 && compact[compact.length - 1].gate_mask === e.gate_mask) {
+            // merge consecutive same-mask entries
+            const prev = compact[compact.length - 1];
+            prev.end_us = e.end_us;
+            prev.duration_us = round3(prev.end_us - prev.start_us);
+            prev.note += ' + ' + e.note;
+          } else {
+            compact.push({ ...e });
+          }
+        }
+        // If still too many, merge the smallest closed/idle entries
+        while (compact.length > MAX_GCL_ENTRIES) {
+          // Find smallest entry that is idle/closed/gap
+          let minIdx = -1, minDur = Infinity;
+          for (let i = 0; i < compact.length; i++) {
+            if ((compact[i].gate_mask === '00000000' || compact[i].note.includes('gap') || compact[i].note.includes('closed'))
+                && compact[i].duration_us < minDur && i > 0) {
+              minDur = compact[i].duration_us; minIdx = i;
+            }
+          }
+          if (minIdx < 0) {
+            // Merge last two entries as fallback
+            minIdx = compact.length - 1;
+          }
+          // Merge with previous
+          if (minIdx > 0) {
+            const prev = compact[minIdx - 1];
+            const cur = compact[minIdx];
+            prev.end_us = cur.end_us;
+            prev.duration_us = round3(prev.end_us - prev.start_us);
+            compact.splice(minIdx, 1);
+          } else {
+            compact.splice(minIdx, 1);
+          }
+        }
+        // Re-index
+        compact.forEach((e, i) => { e.index = i; });
+
         // Collect PCPs used on this port
         const pcpsUsed = new Set();
-        for (const e of gclEntries) {
+        for (const e of rawEntries) {
           if (e.note && !e.note.includes('best-effort') && !e.note.includes('guard') && !e.note.includes('all-gates-closed')) {
-            // Extract priority from the flow entry
             const matchedRow = linkRows[el.id]?.find(r => r.note === e.note && r.type === 'flow');
             if (matchedRow) pcpsUsed.add(matchedRow.priority);
           }
         }
-        // Build TC→PCP mapping
         const pcpToQueue = {};
-        for (const p of pcpsUsed) pcpToQueue[p] = p; // 1:1 PCP→TC mapping
+        for (const p of pcpsUsed) pcpToQueue[p] = p;
         ports[el.id] = {
           to: el.to,
           rate_mbps: el.rate_mbps,
-          entries: gclEntries,
+          entries: compact,
           pcps_used: [...pcpsUsed].sort((a, b) => b - a),
           pcp_to_queue: pcpToQueue
         };
