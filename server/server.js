@@ -39,5 +39,6 @@ app.listen(port, () => {
   console.log(`  ──────────────────────────────`);
   console.log(`  Local:   http://localhost:${port}`);
   console.log(`  Solver:  http://localhost:${port}/solver.html`);
+  console.log(`  Board:   http://localhost:${port}/board.html`);
   console.log(`  API:     http://localhost:${port}/api/board/status\n`);
 });

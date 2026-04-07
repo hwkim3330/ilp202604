@@ -165,43 +165,57 @@ router.get('/gcl/read', async (req, res) => {
   }
 
   try {
-    // Run: keti-tsn get -d <device> --transport <type>
     const args = ['get', '-d', device, '--transport', transport];
     const { stdout } = await ketiTsn(args, 60000);
 
-    // Parse the YAML output and extract TAS sections
+    // Strip "--- Configuration ---" header if present
     const configStart = stdout.indexOf('--- Configuration ---');
     const configYaml = configStart >= 0 ? stdout.substring(configStart + 22) : stdout;
 
-    // Extract gate-parameter-table sections by parsing output
+    // Parse full YAML with js-yaml
+    const parsed = yaml.load(configYaml);
+    const interfaces = parsed?.['ietf-interfaces:interfaces']?.interface || [];
     const ports = {};
-    const lines = configYaml.split('\n');
-    let currentPort = null;
-    let inGateTable = false;
-    let gateSection = [];
 
-    for (const line of lines) {
-      const nameMatch = line.match(/name:\s*'(\d+)'/);
-      if (nameMatch) currentPort = nameMatch[1];
+    for (const iface of interfaces) {
+      const portName = String(iface.name);
+      const bp = iface['ieee802-dot1q-bridge:bridge-port'];
+      const gpt = bp?.['ieee802-dot1q-sched-bridge:gate-parameter-table'];
+      if (!gpt) continue;
 
-      if (line.includes('gate-parameter-table:')) {
-        inGateTable = true;
-        gateSection = [];
-      }
+      const mapEntries = (list) => (list?.['gate-control-entry'] || []).map(e => ({
+        index: e.index,
+        gateStates: e['gate-states-value'],
+        timeInterval: e['time-interval-value']
+      }));
 
-      if (inGateTable) {
-        gateSection.push(line);
-        // Detect end of gate-parameter-table section
-        if (line.match(/^\s{6}\S/) && !line.includes('gate-parameter-table') && gateSection.length > 2) {
-          inGateTable = false;
-          if (currentPort) {
-            ports[currentPort] = gateSection.join('\n');
-          }
-        }
-      }
+      // Network stats
+      const ethInfo = iface['ieee802-ethernet-interface:ethernet'];
+      const stats = iface.statistics || {};
+
+      ports[portName] = {
+        gateEnabled: gpt['gate-enabled'] ?? false,
+        configPending: gpt['config-pending'] ?? false,
+        adminCycleTime: gpt['admin-cycle-time'],
+        operCycleTime: gpt['oper-cycle-time'],
+        adminBaseTime: gpt['admin-base-time'],
+        operBaseTime: gpt['oper-base-time'],
+        adminEntries: mapEntries(gpt['admin-control-list']),
+        operEntries: mapEntries(gpt['oper-control-list']),
+        operGateStates: gpt['oper-gate-states'],
+        supportedListMax: gpt['supported-list-max'],
+        tickGranularity: gpt['tick-granularity'],
+        configChangeTime: gpt['config-change-time'],
+        currentTime: gpt['current-time'],
+        operStatus: iface['oper-status'],
+        macAddress: iface['phys-address'],
+        speed: ethInfo?.speed,
+        rxOctets: stats['in-octets'],
+        txOctets: stats['out-octets']
+      };
     }
 
-    res.json({ ports, raw: configYaml.substring(0, 5000) });
+    res.json({ ports });
   } catch (e) {
     res.status(500).json({ error: e.stderr || e.message });
   }

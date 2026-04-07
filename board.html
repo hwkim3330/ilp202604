@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LAN9662 Board Configuration</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .status-bar {
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      padding: 14px 20px; margin-bottom: 20px;
+      background: linear-gradient(160deg, var(--card) 0%, var(--bg2) 100%);
+      border: 1px solid var(--border); border-radius: var(--radius);
+    }
+    .status-bar .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--text3); flex-shrink: 0;
+    }
+    .status-bar .dot.ok { background: var(--green); box-shadow: 0 0 8px rgba(105,240,174,.4); }
+    .status-bar .dot.err { background: var(--red); }
+    .status-bar .label { font-size: 0.85rem; color: var(--text); font-weight: 600; }
+    .status-bar .device { font-size: 0.78rem; color: var(--text3); font-family: monospace; }
+    .status-bar .spacer { flex: 1; }
+    .btn-read {
+      background: linear-gradient(135deg, var(--green), #059669);
+      color: #060d1f; border: none; border-radius: 10px;
+      padding: 10px 24px; font-weight: 700; font-size: 0.85rem;
+      cursor: pointer; transition: all .2s;
+    }
+    .btn-read:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    .btn-read:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-outline {
+      background: transparent; color: var(--text2);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 18px; font-weight: 600; font-size: 0.82rem;
+      cursor: pointer; transition: all .2s;
+    }
+    .btn-outline:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    .loading-msg {
+      text-align: center; padding: 60px 20px;
+      color: var(--text2); font-size: 0.9rem;
+    }
+    .loading-msg .spinner-lg {
+      display: inline-block; width: 32px; height: 32px;
+      border: 3px solid var(--border); border-top-color: var(--cyan);
+      border-radius: 50%; animation: spin .7s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    .port-card { margin-bottom: 20px; }
+    .port-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+    }
+    .port-num {
+      font-size: 1.4rem; font-weight: 800; color: var(--cyan);
+      background: rgba(0,245,212,.08); border-radius: 10px;
+      width: 48px; height: 48px; display: flex; align-items: center; justify-content: center;
+    }
+    .port-meta { flex: 1; }
+    .port-meta h3 { font-size: 1rem; font-weight: 700; color: var(--text); }
+    .port-meta .info {
+      font-size: 0.78rem; color: var(--text3); margin-top: 2px;
+      display: flex; gap: 16px; flex-wrap: wrap;
+    }
+    .port-meta .info span { display: inline-flex; align-items: center; gap: 4px; }
+    .tag {
+      display: inline-block; padding: 3px 10px; border-radius: 6px;
+      font-size: 0.72rem; font-weight: 600;
+    }
+    .tag-ok { background: rgba(105,240,174,.1); color: var(--green); border: 1px solid rgba(105,240,174,.2); }
+    .tag-warn { background: rgba(249,168,37,.1); color: var(--orange); border: 1px solid rgba(249,168,37,.2); }
+    .tag-off { background: rgba(255,82,82,.1); color: var(--red); border: 1px solid rgba(255,82,82,.2); }
+
+    /* GCL Table */
+    .gcl-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin-top: 12px; }
+    .gcl-table th {
+      text-align: left; padding: 8px 10px; color: var(--text3);
+      font-weight: 500; font-size: 0.72rem; text-transform: uppercase;
+      letter-spacing: 0.05em; border-bottom: 1px solid var(--border);
+    }
+    .gcl-table td {
+      padding: 7px 10px; border-bottom: 1px solid rgba(30,48,96,.4);
+      font-variant-numeric: tabular-nums;
+    }
+    .gcl-table tr:hover td { background: rgba(72,149,239,.04); }
+
+    /* Gate mask 8-bit display */
+    .gate-bits {
+      display: inline-flex; gap: 2px;
+    }
+    .gate-bit {
+      width: 14px; height: 14px; border-radius: 3px;
+      border: 1px solid rgba(255,255,255,.1);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 7px; font-weight: 700; color: rgba(0,0,0,.6);
+    }
+    .gate-bit.off {
+      background: rgba(30,48,96,.5); color: transparent;
+    }
+
+    /* SVG Gantt timeline */
+    .gantt-wrap {
+      margin-top: 14px; padding: 12px 0;
+      border-top: 1px solid rgba(30,48,96,.4);
+    }
+    .gantt-label {
+      font-size: 0.72rem; color: var(--text3); text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 8px; font-weight: 600;
+    }
+    .gantt-svg { width: 100%; overflow: visible; }
+
+    /* Admin vs Oper toggle */
+    .view-toggle {
+      display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+      font-size: 0.72rem;
+    }
+    .view-toggle button {
+      background: transparent; border: none; color: var(--text3);
+      padding: 5px 14px; cursor: pointer; font-weight: 600;
+      transition: all .15s;
+    }
+    .view-toggle button.active {
+      background: rgba(0,245,212,.1); color: var(--cyan);
+    }
+
+    .empty-state {
+      text-align: center; padding: 80px 20px; color: var(--text3);
+    }
+    .empty-state h2 { font-size: 1.3rem; color: var(--text2); margin-bottom: 8px; }
+    .empty-state p { font-size: 0.88rem; line-height: 1.6; }
+
+    .nav-bar {
+      display: flex; gap: 12px; margin-top: 30px; justify-content: center;
+    }
+    .nav-bar a {
+      color: var(--text3); text-decoration: none; font-size: 0.82rem;
+      padding: 8px 16px; border: 1px solid var(--border); border-radius: 8px;
+      transition: all .2s;
+    }
+    .nav-bar a:hover { border-color: var(--cyan); color: var(--cyan); }
+
+    .read-time { font-size: 0.72rem; color: var(--text3); }
+  </style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="wrap">
+    <header class="header">
+      <img src="keti.png" alt="KETI" style="height:36px;margin-bottom:8px" onerror="this.style.display='none'">
+      <h1>LAN9662 Board Configuration</h1>
+      <p class="sub">IEEE 802.1Qbv TAS &mdash; Gate Control List read from the physical board</p>
+    </header>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <span class="dot" id="statusDot"></span>
+      <span class="label" id="statusLabel">Checking...</span>
+      <span class="device" id="statusDevice"></span>
+      <span class="spacer"></span>
+      <span class="read-time" id="readTime"></span>
+      <button class="btn-read" id="btnRead" disabled onclick="readBoard()">
+        Read from Board
+      </button>
+    </div>
+
+    <!-- Port cards container -->
+    <div id="portsContainer">
+      <div class="empty-state">
+        <h2>No Configuration Loaded</h2>
+        <p>Connect the LAN9662 board and click "Read from Board" to fetch the current TAS configuration.<br>
+        Or use the <a href="solver.html" style="color:var(--cyan)">GCL Solver</a> to compute and push a new configuration.</p>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="nav-bar">
+      <a href="solver.html">GCL Solver</a>
+      <a href="index.html">Home</a>
+    </div>
+  </div>
+
+  <script>
+    /* ── TC Colors (same palette as solver) ── */
+    const TC_COLORS = [
+      '#8fa4d0', // TC0 (guard)
+      '#ff5252', // TC1
+      '#69f0ae', // TC2
+      '#f9a825', // TC3
+      '#f06292', // TC4
+      '#7b61ff', // TC5
+      '#00f5d4', // TC6
+      '#4895ef', // TC7
+    ];
+    const BE_COLOR = '#1a3050';
+
+    /* ── Board status polling ── */
+    let boardConnected = false;
+
+    async function checkStatus() {
+      const dot = document.getElementById('statusDot');
+      const label = document.getElementById('statusLabel');
+      const device = document.getElementById('statusDevice');
+      const btn = document.getElementById('btnRead');
+      try {
+        const res = await fetch('/api/board/status');
+        const data = await res.json();
+        boardConnected = data.connected;
+        dot.className = 'dot' + (data.connected ? ' ok' : ' err');
+        label.textContent = data.connected ? 'Connected' : 'Disconnected';
+        device.textContent = data.device;
+        btn.disabled = !data.connected;
+      } catch {
+        dot.className = 'dot err';
+        label.textContent = 'Server offline';
+        device.textContent = '';
+        btn.disabled = true;
+        boardConnected = false;
+      }
+    }
+
+    checkStatus();
+    setInterval(checkStatus, 5000);
+
+    /* ── Read board configuration ── */
+    let reading = false;
+
+    async function readBoard() {
+      if (reading || !boardConnected) return;
+      reading = true;
+
+      const btn = document.getElementById('btnRead');
+      const container = document.getElementById('portsContainer');
+      const readTime = document.getElementById('readTime');
+      const startTime = Date.now();
+
+      btn.disabled = true;
+      btn.textContent = 'Reading...';
+      container.innerHTML = `
+        <div class="loading-msg">
+          <div class="spinner-lg"></div><br>
+          Reading TAS configuration from board...<br>
+          <span style="font-size:0.75rem;color:var(--text3)">This may take 30-60 seconds</span>
+        </div>`;
+
+      try {
+        const res = await fetch('/api/gcl/read');
+        const data = await res.json();
+
+        if (data.error) {
+          container.innerHTML = `<div class="card" style="color:var(--red)">Error: ${data.error}</div>`;
+          return;
+        }
+
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        readTime.textContent = `Last read: ${new Date().toLocaleTimeString()} (${elapsed}s)`;
+
+        renderPorts(data.ports);
+      } catch (e) {
+        container.innerHTML = `<div class="card" style="color:var(--red)">Failed to read: ${e.message}</div>`;
+      } finally {
+        reading = false;
+        btn.disabled = !boardConnected;
+        btn.textContent = 'Read from Board';
+      }
+    }
+
+    /* ── Render all ports ── */
+    function renderPorts(ports) {
+      const container = document.getElementById('portsContainer');
+      const portNums = Object.keys(ports).sort((a, b) => +a - +b);
+
+      if (portNums.length === 0) {
+        container.innerHTML = `<div class="card"><p style="color:var(--text3)">No TAS-configured ports found on the board.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = '';
+      for (const pn of portNums) {
+        container.appendChild(renderPortCard(pn, ports[pn]));
+      }
+    }
+
+    /* ── Render single port card ── */
+    function renderPortCard(portNum, p) {
+      const card = document.createElement('div');
+      card.className = 'card port-card';
+
+      // Cycle time in µs
+      const cycleNs = p.adminCycleTime?.numerator || 500000;
+      const cycleUs = (cycleNs / 1000).toFixed(1);
+
+      // Use oper entries by default (what's actually running), fallback to admin
+      const entries = (p.operEntries && p.operEntries.length > 0) ? p.operEntries : p.adminEntries;
+      const showingOper = p.operEntries && p.operEntries.length > 0;
+
+      // Status tags
+      let statusHtml = '';
+      if (p.gateEnabled) {
+        statusHtml += `<span class="tag tag-ok">Gate Enabled</span> `;
+      } else {
+        statusHtml += `<span class="tag tag-off">Gate Disabled</span> `;
+      }
+      if (p.configPending) {
+        statusHtml += `<span class="tag tag-warn">Config Pending</span> `;
+      } else {
+        statusHtml += `<span class="tag tag-ok">Config Active</span> `;
+      }
+
+      // Port info
+      const linkStatus = p.operStatus === 'up' ? 'Link Up' : (p.operStatus || 'unknown');
+      const mac = p.macAddress || '—';
+
+      card.innerHTML = `
+        <div class="port-header">
+          <div class="port-num">${portNum}</div>
+          <div class="port-meta">
+            <h3>Port ${portNum} &mdash; TAS Configuration</h3>
+            <div class="info">
+              <span>Cycle: <strong style="color:var(--cyan)">${cycleUs} &micro;s</strong></span>
+              <span>Entries: <strong>${entries.length}</strong></span>
+              <span>Link: ${linkStatus}</span>
+              <span>MAC: <code style="font-size:0.72rem;color:var(--text3)">${mac}</code></span>
+            </div>
+          </div>
+          <div>${statusHtml}</div>
+        </div>
+
+        <!-- GCL Entry Table -->
+        <table class="gcl-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Gate Mask</th>
+              <th>Open TCs</th>
+              <th>Duration (ns)</th>
+              <th>Duration (&micro;s)</th>
+              <th>% Cycle</th>
+            </tr>
+          </thead>
+          <tbody id="gcl-tbody-${portNum}"></tbody>
+        </table>
+
+        <!-- SVG Gantt Timeline -->
+        <div class="gantt-wrap">
+          <div class="gantt-label">${showingOper ? 'Operational' : 'Admin'} Gate Timeline &mdash; ${cycleUs} &micro;s cycle</div>
+          <div id="gantt-${portNum}"></div>
+        </div>
+      `;
+
+      // Populate table rows
+      const tbody = card.querySelector(`#gcl-tbody-${portNum}`);
+      for (const e of entries) {
+        const mask = e.gateStates;
+        const dur = e.timeInterval;
+        const durUs = (dur / 1000).toFixed(3);
+        const pct = ((dur / cycleNs) * 100).toFixed(1);
+        const openTCs = getOpenTCs(mask);
+        const bitsHtml = renderGateBits(mask);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="color:var(--text3)">${e.index}</td>
+          <td>${bitsHtml} <span style="color:var(--text3);font-size:0.72rem">(${mask})</span></td>
+          <td>${openTCs}</td>
+          <td>${dur.toLocaleString()}</td>
+          <td><strong>${durUs}</strong></td>
+          <td>${pct}%</td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      // Render Gantt SVG
+      const ganttDiv = card.querySelector(`#gantt-${portNum}`);
+      ganttDiv.appendChild(renderGantt(entries, cycleNs));
+
+      return card;
+    }
+
+    /* ── Gate bits 8-bit visualization ── */
+    function renderGateBits(mask) {
+      let html = '<span class="gate-bits">';
+      for (let bit = 7; bit >= 0; bit--) {
+        const isOpen = (mask >> bit) & 1;
+        const color = isOpen ? TC_COLORS[bit] : '';
+        const cls = isOpen ? '' : ' off';
+        const style = isOpen ? `background:${color}` : '';
+        html += `<span class="gate-bit${cls}" style="${style}" title="TC${bit}">${bit}</span>`;
+      }
+      html += '</span>';
+      return html;
+    }
+
+    /* ── Get open TC names ── */
+    function getOpenTCs(mask) {
+      if (mask === 255) return '<span style="color:var(--text3)">All (BE)</span>';
+      const tcs = [];
+      for (let bit = 7; bit >= 0; bit--) {
+        if ((mask >> bit) & 1) {
+          tcs.push(`<span style="color:${TC_COLORS[bit]};font-weight:600">TC${bit}</span>`);
+        }
+      }
+      return tcs.join(', ') || '<span style="color:var(--red)">None</span>';
+    }
+
+    /* ── SVG Gantt timeline ── */
+    function renderGantt(entries, cycleNs) {
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const W = 800, H = 60, PAD = 0;
+      const barH = 36, barY = 8;
+      const labelY = barY + barH + 14;
+
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      svg.setAttribute('class', 'gantt-svg');
+
+      let x = PAD;
+      for (const e of entries) {
+        const w = (e.timeInterval / cycleNs) * (W - 2 * PAD);
+        if (w < 0.5) { x += w; continue; }
+
+        const mask = e.gateStates;
+        const color = getEntryColor(mask);
+        const durUs = (e.timeInterval / 1000).toFixed(1);
+
+        // Bar
+        const rect = document.createElementNS(svgNS, 'rect');
+        rect.setAttribute('x', x);
+        rect.setAttribute('y', barY);
+        rect.setAttribute('width', Math.max(w, 1));
+        rect.setAttribute('height', barH);
+        rect.setAttribute('rx', 3);
+        rect.setAttribute('fill', color);
+        rect.setAttribute('stroke', 'rgba(255,255,255,0.1)');
+        rect.setAttribute('stroke-width', 0.5);
+        svg.appendChild(rect);
+
+        // Label inside bar (only if wide enough)
+        if (w > 30) {
+          const text = document.createElementNS(svgNS, 'text');
+          text.setAttribute('x', x + w / 2);
+          text.setAttribute('y', barY + barH / 2);
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('dominant-baseline', 'central');
+          text.setAttribute('font-size', w > 60 ? '10' : '8');
+          text.setAttribute('font-weight', '700');
+          text.setAttribute('fill', mask === 255 ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.7)');
+          text.textContent = getEntryLabel(mask);
+          svg.appendChild(text);
+        }
+
+        // Duration label below
+        if (w > 24) {
+          const durText = document.createElementNS(svgNS, 'text');
+          durText.setAttribute('x', x + w / 2);
+          durText.setAttribute('y', labelY);
+          durText.setAttribute('text-anchor', 'middle');
+          durText.setAttribute('font-size', '8');
+          durText.setAttribute('fill', '#5e7099');
+          durText.textContent = `${durUs}us`;
+          svg.appendChild(durText);
+        }
+
+        x += w;
+      }
+
+      return svg;
+    }
+
+    /* ── Entry color by gate mask ── */
+    function getEntryColor(mask) {
+      if (mask === 255) return BE_COLOR;
+      // Find highest set bit for color
+      for (let bit = 7; bit >= 0; bit--) {
+        if ((mask >> bit) & 1) return TC_COLORS[bit];
+      }
+      return '#333';
+    }
+
+    /* ── Entry label for Gantt ── */
+    function getEntryLabel(mask) {
+      if (mask === 255) return 'ALL OPEN';
+      const tcs = [];
+      for (let bit = 7; bit >= 0; bit--) {
+        if ((mask >> bit) & 1) tcs.push(`TC${bit}`);
+      }
+      return tcs.join('+') || '—';
+    }
+  </script>
+</body>
+</html>
