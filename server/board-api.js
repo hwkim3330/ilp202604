@@ -44,10 +44,28 @@ async function ketiTsn(args, timeout = 30000) {
 }
 
 /* ── GET /api/board/status ── */
-router.get('/board/status', (req, res) => {
+router.get('/board/status', async (req, res) => {
+  const transport = req.query.transport || 'serial';
   const device = req.query.device || '/dev/ttyACM0';
-  const connected = fs.existsSync(device);
-  res.json({ connected, device });
+  const host = req.query.host || null;
+
+  if (transport === 'serial') {
+    const connected = fs.existsSync(device);
+    return res.json({ connected, device, transport });
+  }
+
+  // Ethernet or WiFi — try keti-tsn checksum to probe
+  if (!host) {
+    return res.json({ connected: false, transport, error: 'host required for eth/wifi' });
+  }
+  try {
+    const args = ['checksum', '--transport', transport, '--host', host];
+    const { stdout } = await ketiTsn(args, 5000);
+    const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
+    res.json({ connected, transport, host, output: stdout.trim() });
+  } catch (e) {
+    res.json({ connected: false, transport, host, error: e.message });
+  }
 });
 
 /* ── POST /api/gcl/export ── */
@@ -74,15 +92,20 @@ router.post('/gcl/push', async (req, res) => {
     boardConfigs,
     portMap,
     device = '/dev/ttyACM0',
-    transport = 'serial'
+    transport = 'serial',
+    host = null
   } = req.body;
 
   if (!boardConfigs || !portMap) {
     return res.status(400).json({ error: 'boardConfigs and portMap are required' });
   }
 
-  if (!fs.existsSync(device)) {
+  // Only check device file for serial transport
+  if (transport === 'serial' && !fs.existsSync(device)) {
     return res.status(400).json({ error: `Device not found: ${device}` });
+  }
+  if ((transport === 'eth' || transport === 'wifi') && !host) {
+    return res.status(400).json({ error: `host is required for ${transport} transport` });
   }
 
   const results = [];
@@ -117,8 +140,13 @@ router.post('/gcl/push', async (req, res) => {
       const tmpFile = path.join(os.tmpdir(), `tas-port${portNum}-${Date.now()}.yaml`);
       fs.writeFileSync(tmpFile, yamlStr);
 
-      // Run: keti-tsn patch <file> -d <device> --transport <type>
-      const args = ['patch', tmpFile, '-d', device, '--transport', transport];
+      // Build CLI args based on transport
+      const args = ['patch', tmpFile];
+      if (transport === 'serial') {
+        args.push('-d', device, '--transport', 'serial');
+      } else {
+        args.push('--transport', transport, '--host', host);
+      }
       const { stdout, stderr } = await ketiTsn(args);
 
       // Clean up temp file
@@ -159,13 +187,19 @@ router.post('/gcl/push', async (req, res) => {
 router.get('/gcl/read', async (req, res) => {
   const device = req.query.device || '/dev/ttyACM0';
   const transport = req.query.transport || 'serial';
+  const host = req.query.host || null;
 
-  if (!fs.existsSync(device)) {
+  if (transport === 'serial' && !fs.existsSync(device)) {
     return res.status(400).json({ error: `Device not found: ${device}` });
+  }
+  if ((transport === 'eth' || transport === 'wifi') && !host) {
+    return res.status(400).json({ error: `host is required for ${transport} transport` });
   }
 
   try {
-    const args = ['get', '-d', device, '--transport', transport];
+    const args = transport === 'serial'
+      ? ['get', '-d', device, '--transport', 'serial']
+      : ['get', '--transport', transport, '--host', host];
     const { stdout } = await ketiTsn(args, 90000);
 
     // Strip "--- Configuration ---" header if present
@@ -228,14 +262,18 @@ router.post('/gcl/push-port', async (req, res) => {
     cycleUs = 500,
     entries = [],
     device = '/dev/ttyACM0',
-    transport = 'serial'
+    transport = 'serial',
+    host = null
   } = req.body;
 
   if (!port || !entries.length) {
     return res.status(400).json({ error: 'port and entries are required' });
   }
-  if (!fs.existsSync(device)) {
+  if (transport === 'serial' && !fs.existsSync(device)) {
     return res.status(400).json({ error: `Device not found: ${device}` });
+  }
+  if ((transport === 'eth' || transport === 'wifi') && !host) {
+    return res.status(400).json({ error: `host is required for ${transport} transport` });
   }
 
   try {
@@ -251,7 +289,9 @@ router.post('/gcl/push-port', async (req, res) => {
     const tmpFile = path.join(os.tmpdir(), `tas-port${port}-${Date.now()}.yaml`);
     fs.writeFileSync(tmpFile, yamlStr);
 
-    const args = ['patch', tmpFile, '-d', device, '--transport', transport];
+    const args = transport === 'serial'
+      ? ['patch', tmpFile, '-d', device, '--transport', 'serial']
+      : ['patch', tmpFile, '--transport', transport, '--host', host];
     const { stdout, stderr } = await ketiTsn(args);
     fs.unlinkSync(tmpFile);
 

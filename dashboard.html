@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KETI TSN — Unified Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #f5f5f7;
+      --card: #ffffff;
+      --border: rgba(0,0,0,.06);
+      --border-hi: rgba(99,102,241,.3);
+      --text: #1d1d1f;
+      --text2: #6e6e73;
+      --text3: #aeaeb2;
+      --accent: #6366F1;
+      --accent2: #818CF8;
+      --green: #34c759;
+      --orange: #ff9500;
+      --red: #ff3b30;
+      --cyan: #0891b2;
+      --radius: 16px;
+      --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-lg: 0 4px 16px rgba(0,0,0,.08);
+    }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+      background: var(--bg); color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Layout ── */
+    .dashboard {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto 1fr auto;
+      gap: 0;
+      height: 100vh;
+      padding: 10px;
+    }
+
+    /* ── Top bar ── */
+    .top-bar {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; gap: 16px;
+      padding: 10px 20px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 10px;
+    }
+    .top-bar .logo { height: 28px; }
+    .top-bar h1 {
+      font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #6366F1, #818CF8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .top-bar .spacer { flex: 1; }
+    .pill {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 5px 14px; border-radius: 100px;
+      font-size: 0.72rem; font-weight: 500; color: var(--text2);
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green { background: var(--green); box-shadow: 0 0 6px rgba(52,199,89,.4); }
+    .dot-orange { background: var(--orange); }
+    .dot-red { background: var(--red); }
+    .dot-off { background: var(--text3); }
+    .val { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+
+    /* ── Panels ── */
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+      display: flex; flex-direction: column;
+    }
+    .panel-left { margin-right: 5px; }
+    .panel-right { margin-left: 5px; }
+
+    .panel-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: rgba(99,102,241,.02);
+    }
+    .panel-header h2 {
+      font-size: 0.85rem; font-weight: 700; color: var(--text);
+    }
+    .panel-header .sub {
+      font-size: 0.68rem; color: var(--text3);
+    }
+    .panel-header .tag {
+      font-size: 0.62rem; font-weight: 700;
+      padding: 2px 10px; border-radius: 6px;
+      background: rgba(99,102,241,.1); color: var(--accent);
+    }
+    .panel-header .tag-live {
+      background: rgba(255,59,48,.08); color: var(--red);
+    }
+
+    .panel-body { flex: 1; position: relative; overflow: hidden; }
+
+    /* ── Left panel: 3D ── */
+    #canvas3d {
+      width: 100%; height: 100%;
+      display: block; cursor: grab;
+      background: linear-gradient(180deg, #f8f9fa 0%, #eef2ff 100%);
+    }
+    #canvas3d:active { cursor: grabbing; }
+
+    .solver-overlay {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(255,255,255,.97) 40%);
+      padding: 48px 16px 12px;
+      pointer-events: none;
+    }
+    .solver-overlay > * { pointer-events: auto; }
+
+    .solver-metrics {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .metric {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 14px;
+      min-width: 100px;
+    }
+    .metric .label { font-size: 0.6rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .metric .value { font-size: 1.05rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+    .solver-btns {
+      display: flex; gap: 6px; align-items: center;
+    }
+    .btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text2); padding: 6px 16px;
+      border-radius: 8px; font-size: 0.72rem; font-weight: 600;
+      cursor: pointer; transition: all .15s;
+      font-family: inherit;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-push {
+      background: rgba(52,199,89,.06); border-color: rgba(52,199,89,.25);
+      color: var(--green); font-weight: 700;
+    }
+    .btn-push:hover { background: rgba(52,199,89,.12); }
+    .btn-push:disabled { opacity: .35; cursor: not-allowed; }
+
+    .solver-status {
+      font-size: 0.68rem; color: var(--text3); margin-left: auto;
+    }
+
+    /* ── Right panel: LiDAR ── */
+    #lidarCanvas {
+      width: 100%; height: 100%;
+      display: block; cursor: grab;
+      background: #0a0a0f;
+    }
+    #lidarCanvas:active { cursor: grabbing; }
+
+    .lidar-hud {
+      position: absolute; top: 10px; right: 12px;
+      display: flex; gap: 6px;
+    }
+    .lidar-hud .pill {
+      background: rgba(0,0,0,.5); border-color: rgba(255,255,255,.1);
+      color: rgba(255,255,255,.7); backdrop-filter: blur(10px);
+    }
+    .lidar-hud .pill .val { color: #fff; }
+    .lidar-controls {
+      position: absolute; bottom: 10px; right: 12px;
+      display: flex; gap: 4px;
+    }
+    .lidar-controls .btn {
+      font-size: 0.65rem; padding: 5px 12px;
+      background: rgba(0,0,0,.5); border-color: rgba(255,255,255,.1);
+      color: rgba(255,255,255,.8); backdrop-filter: blur(10px);
+    }
+    .lidar-controls .btn:hover { background: rgba(0,0,0,.7); }
+    .lidar-legend {
+      position: absolute; bottom: 12px; left: 12px;
+      display: flex; gap: 4px; align-items: center;
+      font-size: 0.6rem; color: rgba(255,255,255,.4);
+    }
+    .legend-bar {
+      width: 80px; height: 6px; border-radius: 3px;
+      background: linear-gradient(90deg, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000);
+    }
+
+    /* ── Bottom bar ── */
+    .bottom-bar {
+      grid-column: 1 / -1;
+      display: flex; gap: 8px; align-items: stretch;
+      margin-top: 10px;
+    }
+    .bottom-card {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 12px 16px;
+      display: flex; flex-direction: column; justify-content: center;
+    }
+    .bottom-card .bc-label {
+      font-size: 0.6rem; color: var(--text3); text-transform: uppercase;
+      letter-spacing: 0.05em; font-weight: 600;
+    }
+    .bottom-card .bc-val {
+      font-size: 1.05rem; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 3px;
+    }
+
+    /* ── GCL mini Gantt ── */
+    .gantt-mini { flex: 3; padding: 10px 16px; }
+    .gantt-mini .bc-label { margin-bottom: 8px; }
+    .gantt-row {
+      display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+    }
+    .gantt-label {
+      font-size: 0.62rem; color: var(--text3); font-weight: 600;
+      width: 80px; text-align: right; flex-shrink: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .gantt-bar-container {
+      flex: 1; height: 12px; background: var(--bg);
+      border-radius: 4px; position: relative; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .gantt-segment {
+      position: absolute; top: 0; height: 100%;
+      border-radius: 3px;
+    }
+
+    /* ── Board config mini ── */
+    .board-mini { flex: 2; padding: 10px 16px; }
+    .board-mini .bc-label { margin-bottom: 6px; }
+    .board-entry {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.65rem; color: var(--text2);
+      padding: 2px 0;
+    }
+    .board-entry .port-num {
+      font-weight: 700; color: var(--accent);
+      min-width: 44px;
+    }
+    .gate-bits-mini { display: inline-flex; gap: 1px; }
+    .gate-bit-mini {
+      display: inline-block; width: 8px; height: 10px; border-radius: 2px;
+      font-size: 6px; text-align: center; line-height: 10px; font-weight: 700;
+    }
+    .gate-bit-mini.open { background: rgba(52,199,89,.2); color: var(--green); }
+    .gate-bit-mini.closed { background: rgba(0,0,0,.04); color: var(--text3); }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <img src="keti.png" class="logo" alt="KETI" onerror="this.style.display='none'">
+      <h1>KETI TSN Dashboard</h1>
+      <span class="spacer"></span>
+      <div class="pill" style="gap:4px;">
+        <select id="transportSel" style="background:transparent;border:none;font-size:0.68rem;font-weight:600;color:inherit;font-family:inherit;cursor:pointer;outline:none;">
+          <option value="serial">Serial</option>
+          <option value="eth">Ethernet</option>
+        </select>
+      </div>
+      <div class="pill" id="hostPill" style="display:none;gap:4px;">
+        <input id="hostInput" type="text" placeholder="192.168.1.10" value="192.168.1.10"
+          style="background:transparent;border:none;font-size:0.68rem;color:inherit;font-family:inherit;width:100px;outline:none;">
+      </div>
+      <div class="pill">
+        <div class="dot dot-off" id="boardDot"></div>
+        <span id="boardText">Checking board...</span>
+      </div>
+      <div class="pill">
+        <div class="dot dot-off" id="lidarDot"></div>
+        <span id="lidarText">Connecting LiDAR...</span>
+      </div>
+      <div class="pill">
+        <span>FPS</span>
+        <span class="val" id="lidarFps">—</span>
+      </div>
+      <div class="pill">
+        <span>Points</span>
+        <span class="val" id="lidarPts">—</span>
+      </div>
+    </div>
+
+    <!-- Left: 3D Topology + Solver -->
+    <div class="panel panel-left">
+      <div class="panel-header">
+        <h2>GCL Solver + 3D Topology</h2>
+        <span class="tag" id="engineTag">Greedy</span>
+        <span class="sub">ROii 8-TC Balanced &mdash; 500 µs cycle &mdash; 1 Gbps links</span>
+      </div>
+      <div class="panel-body">
+        <div id="canvas3d"></div>
+        <div class="solver-overlay">
+          <div class="solver-metrics" id="solverMetrics"></div>
+          <div class="solver-btns">
+            <button class="btn active" id="btnGreedy">Greedy</button>
+            <button class="btn" id="btnILP">ILP (GLPK)</button>
+            <button class="btn btn-push" id="btnPush" disabled>Push to Board</button>
+            <span class="solver-status" id="solverStatus"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: LiDAR -->
+    <div class="panel panel-right">
+      <div class="panel-header">
+        <h2>Ouster OS-1-16 LiDAR</h2>
+        <span class="tag tag-live" id="lidarTag">Connecting</span>
+        <span class="sub">UDP :7502 → WebSocket &mdash; 16 beams &times; 512 cols</span>
+      </div>
+      <div class="panel-body">
+        <canvas id="lidarCanvas"></canvas>
+        <div class="lidar-hud">
+          <div class="pill">
+            <span>Max Range</span>
+            <span class="val" id="lidarRange">—</span>
+          </div>
+          <div class="pill">
+            <span>Bandwidth</span>
+            <span class="val" id="lidarBw">—</span>
+          </div>
+        </div>
+        <div class="lidar-legend">
+          <span>Near</span>
+          <div class="legend-bar"></div>
+          <span>Far</span>
+        </div>
+        <div class="lidar-controls">
+          <button class="btn" id="btnLidarColor">Height</button>
+          <button class="btn" id="btnLidarSize">Size 2</button>
+          <button class="btn" id="btnLidarReset">Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="bottom-bar">
+      <div class="bottom-card">
+        <div class="bc-label">Packets / Cycle</div>
+        <div class="bc-val" id="bcPkts" style="color:var(--accent)">—</div>
+      </div>
+      <div class="bottom-card">
+        <div class="bc-label">Max E2E Delay</div>
+        <div class="bc-val" id="bcDelay" style="color:var(--orange)">—</div>
+      </div>
+      <div class="bottom-card">
+        <div class="bc-label">Max Link Util</div>
+        <div class="bc-val" id="bcUtil" style="color:var(--cyan)">—</div>
+      </div>
+      <div class="bottom-card">
+        <div class="bc-label">Deadline Check</div>
+        <div class="bc-val" id="bcFeasible" style="color:var(--text3)">—</div>
+      </div>
+      <div class="bottom-card gantt-mini">
+        <div class="bc-label">GCL Timeline — SW_REAR Egress (500 µs cycle)</div>
+        <div id="ganttMini"></div>
+      </div>
+      <div class="bottom-card board-mini">
+        <div class="bc-label">Board GCL (LAN9662 Port 1)</div>
+        <div id="boardMini"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/d3.min.js"></script>
+  <script type="module">
+  import { initTooltip, solveGreedy, solveILP } from './js/ilp-core.js';
+
+  /* ═══════════════════════════════════════════════
+     MODEL — ROii 8-TC Balanced Sensor Model
+     ═══════════════════════════════════════════════ */
+  const NODES = [
+    { id: "LIDAR_FC",  type: "endstation" }, { id: "LIDAR_FL",  type: "endstation" },
+    { id: "LIDAR_FR",  type: "endstation" }, { id: "LIDAR_R",   type: "endstation" },
+    { id: "RADAR_F",   type: "endstation" }, { id: "RADAR_FLC", type: "endstation" },
+    { id: "RADAR_FRC", type: "endstation" }, { id: "RADAR_RLC", type: "endstation" },
+    { id: "RADAR_RRC", type: "endstation" },
+    { id: "SW_FL",   type: "switch" }, { id: "SW_FR",   type: "switch" },
+    { id: "SW_REAR", type: "switch" }, { id: "ACU_IT",  type: "endstation" }
+  ];
+  const LINKS = [
+    { id: "l_lidarfc_swfl",   from: "LIDAR_FC",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarfl_swfl",   from: "LIDAR_FL",  to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarflc_swfl",  from: "RADAR_FLC", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarf_swfr",    from: "RADAR_F",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarfr_swfr",   from: "LIDAR_FR",  to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarfrc_swfr",  from: "RADAR_FRC", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_lidarr_swrear",  from: "LIDAR_R",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarrlc_swrear",from: "RADAR_RLC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_radarrrc_swrear",from: "RADAR_RRC", to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swfl_swfr",    from: "SW_FL",   to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swfr_swfl",    from: "SW_FR",   to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swfl_swrear",  from: "SW_FL",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swrear_swfl",  from: "SW_REAR", to: "SW_FL",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swfr_swrear",  from: "SW_FR",   to: "SW_REAR", rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swrear_swfr",  from: "SW_REAR", to: "SW_FR",   rate_mbps: 1000, prop_delay_us: 0.5 },
+    { id: "l_swrear_acu",   from: "SW_REAR", to: "ACU_IT",  rate_mbps: 1000, prop_delay_us: 0.3 }
+  ];
+  const FLOWS = [
+    { id: "f_lidar_fc",  priority: 7, payload_bytes: 1248, period_us: 500,  deadline_us: 1000, traffic_type: "lidar", src: "LIDAR_FC",  dst: "ACU_IT", k_paths: 1 },
+    { id: "f_lidar_fl",  priority: 6, payload_bytes: 812,  period_us: 500,  deadline_us: 1000, traffic_type: "lidar", src: "LIDAR_FL",  dst: "ACU_IT", k_paths: 1 },
+    { id: "f_lidar_fr",  priority: 5, payload_bytes: 812,  period_us: 500,  deadline_us: 1000, traffic_type: "lidar", src: "LIDAR_FR",  dst: "ACU_IT", k_paths: 1 },
+    { id: "f_lidar_r",   priority: 4, payload_bytes: 1248, period_us: 1000, deadline_us: 1000, traffic_type: "lidar", src: "LIDAR_R",   dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_f",   priority: 3, payload_bytes: 128,  period_us: 500,  deadline_us: 1000, traffic_type: "radar", src: "RADAR_F",   dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_flc", priority: 2, payload_bytes: 128,  period_us: 1000, deadline_us: 1000, traffic_type: "radar", src: "RADAR_FLC", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_frc", priority: 1, payload_bytes: 128,  period_us: 1000, deadline_us: 1000, traffic_type: "radar", src: "RADAR_FRC", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_rlc", priority: 1, payload_bytes: 128,  period_us: 1000, deadline_us: 1000, traffic_type: "radar", src: "RADAR_RLC", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_radar_rrc", priority: 0, payload_bytes: 128,  period_us: 1000, deadline_us: 1000, traffic_type: "radar", src: "RADAR_RRC", dst: "ACU_IT", k_paths: 1 },
+    { id: "f_bg_1",      priority: 0, payload_bytes: 500,  period_us: 500,  deadline_us: 1000, traffic_type: "bg", src: "SW_FL",  dst: "ACU_IT", k_paths: 1 },
+    { id: "f_bg_2",      priority: 0, payload_bytes: 500,  period_us: 1000, deadline_us: 1000, traffic_type: "bg", src: "SW_FR",  dst: "ACU_IT", k_paths: 1 }
+  ];
+  const TOPOLOGY = {
+    cycle_time_us: 500, guard_band_us: 1, processing_delay_us: 3, no_be: true,
+    nodes: JSON.parse(JSON.stringify(NODES)),
+    links: JSON.parse(JSON.stringify(LINKS)),
+    flows: JSON.parse(JSON.stringify(FLOWS))
+  };
+  const deep = o => JSON.parse(JSON.stringify(o));
+
+  const FLOW_COLORS = {
+    f_lidar_fc:'#F28E2B', f_lidar_fl:'#E9C46A', f_lidar_fr:'#E76F51', f_lidar_r:'#D4A574',
+    f_radar_f:'#457B9D', f_radar_flc:'#76B7B2', f_radar_frc:'#2A9D8F', f_radar_rlc:'#7B68AE',
+    f_radar_rrc:'#264653', f_bg_1:'#ADB5BD', f_bg_2:'#CED4DA'
+  };
+
+  const POS_3D = {
+    LIDAR_FC:  {x:0,y:5.5,z:18.5}, LIDAR_FL:  {x:-8.5,y:10,z:16.2},
+    LIDAR_FR:  {x:8.5,y:10,z:16.2}, LIDAR_R:   {x:0,y:5.5,z:-18.5},
+    RADAR_F:   {x:0,y:7,z:18.5}, RADAR_FLC: {x:-7,y:6.5,z:17.5},
+    RADAR_FRC: {x:7,y:6.5,z:17.5}, RADAR_RLC: {x:-7,y:6.5,z:-18},
+    RADAR_RRC: {x:7,y:6.5,z:-18},
+    SW_FL:     {x:-4,y:2,z:10}, SW_FR:     {x:4,y:2,z:10},
+    SW_REAR:   {x:0,y:2,z:-8}, ACU_IT:    {x:0,y:2,z:-15}
+  };
+  const TILTS_3D = {
+    RADAR_FLC:{y:-Math.PI/6}, RADAR_FRC:{y:Math.PI/6},
+    RADAR_RLC:{y:Math.PI/6}, RADAR_RRC:{y:-Math.PI/6}
+  };
+  const LABELS_3D = {
+    LIDAR_FC:'G32-FC', LIDAR_FL:'PND-FL', LIDAR_FR:'PND-FR', LIDAR_R:'G32-Rear',
+    RADAR_F:'MRR35-F', RADAR_FLC:'MRR35-FLC', RADAR_FRC:'MRR35-FRC',
+    RADAR_RLC:'MRR35-RLC', RADAR_RRC:'MRR35-RRC',
+    SW_FL:'Front-L ZC', SW_FR:'Front-R ZC', SW_REAR:'Rear-GW', ACU_IT:'ACU-IT'
+  };
+
+  function getDeviceType(id) {
+    if (id==='LIDAR_FC'||id==='LIDAR_R') return 'lidar_g32';
+    if (id==='LIDAR_FL'||id==='LIDAR_FR') return 'lidar_pandar';
+    if (id.startsWith('RADAR')) return 'radar';
+    if (id==='SW_REAR') return 'switch_r';
+    if (id.startsWith('SW')) return 'switch_f';
+    return 'ecu';
+  }
+
+  const TMPL = {
+    lidar_g32:{w:1,h:1,d:1,color:0xF28E2B}, lidar_pandar:{w:1,h:1,d:1,color:0xE76F51},
+    radar:{w:1,h:1,d:1,color:0x457B9D}, switch_f:{w:4,h:2,d:4,color:0x6366F1},
+    switch_r:{w:4,h:2,d:4,color:0x818CF8}, ecu:{w:4,h:2,d:4,color:0xdc2626}
+  };
+
+  /* ═══════════════════════════════════════════════
+     3D TOPOLOGY (left panel)
+     ═══════════════════════════════════════════════ */
+  let renderer3d = null;
+  function init3D() {
+    const container = document.getElementById('canvas3d');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0f0f0);
+    scene.fog = new THREE.Fog(0xf0f0f0, 80, 250);
+    const camera = new THREE.PerspectiveCamera(60,1,0.1,1000);
+    camera.position.set(50,35,70);
+    if (renderer3d) renderer3d.dispose();
+    renderer3d = new THREE.WebGLRenderer({antialias:true});
+    renderer3d.shadowMap.enabled=true; renderer3d.shadowMap.type=THREE.PCFSoftShadowMap;
+    function updateSize() {
+      const w=container.clientWidth, h=container.clientHeight;
+      camera.aspect=w/h; camera.updateProjectionMatrix();
+      renderer3d.setSize(w,h);
+    }
+    updateSize(); container.appendChild(renderer3d.domElement);
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(container);
+
+    const controls = new THREE.OrbitControls(camera, renderer3d.domElement);
+    controls.enableDamping=true; controls.dampingFactor=0.05;
+    controls.autoRotate=true; controls.autoRotateSpeed=1.0;
+    controls.minDistance=20; controls.maxDistance=120;
+
+    scene.add(new THREE.AmbientLight(0xffffff,1.2));
+    const dl=new THREE.DirectionalLight(0xffffff,1.5); dl.position.set(30,50,30);
+    dl.castShadow=true; dl.shadow.mapSize.set(2048,2048);
+    dl.shadow.camera.near=0.5; dl.shadow.camera.far=200;
+    dl.shadow.camera.left=-60; dl.shadow.camera.right=60;
+    dl.shadow.camera.top=60; dl.shadow.camera.bottom=-60;
+    scene.add(dl);
+    scene.add(new THREE.DirectionalLight(0xffffff,1.0)).position.set(0,50,0);
+    scene.add(new THREE.PointLight(0x6366F1,2,100)).position.set(20,15,20);
+    scene.add(new THREE.PointLight(0x818CF8,1.5,80)).position.set(-20,15,-20);
+
+    const grid=new THREE.GridHelper(100,50,0x6366F1,0xCCCCCC);
+    grid.material.opacity=0.4; grid.material.transparent=true; grid.position.y=-0.5;
+    scene.add(grid);
+    const plane=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.ShadowMaterial({opacity:0.3}));
+    plane.rotation.x=-Math.PI/2; plane.position.y=-0.5; plane.receiveShadow=true; scene.add(plane);
+
+    // GLB model
+    const loader = new THREE.GLTFLoader();
+    loader.load('./roii.glb', gltf => {
+      const m=gltf.scene, box=new THREE.Box3().setFromObject(m), size=box.getSize(new THREE.Vector3()), center=box.getCenter(new THREE.Vector3());
+      const s=40/Math.max(size.x,size.y,size.z); m.scale.set(s,s,s);
+      m.position.x=-center.x; m.position.y=-center.y+(size.y*s*0.5)+0.5; m.position.z=-center.z;
+      m.traverse(c=>{if(!c.isMesh)return;[].concat(c.material).forEach(mt=>{
+        mt.transparent=true;mt.opacity=0.3;mt.side=THREE.DoubleSide;mt.depthWrite=true;
+        if(mt.color)mt.color.multiplyScalar(1.5);
+        mt.emissive=mt.color?mt.color.clone().multiplyScalar(0.3):new THREE.Color(0xffffff);
+        mt.emissiveIntensity=0.4;
+      });c.castShadow=true;c.receiveShadow=true;});
+      scene.add(m);
+    });
+
+    // Devices
+    function createDevice(nodeId, pos, label, tilt) {
+      const type=getDeviceType(nodeId), t=TMPL[type]||TMPL.ecu;
+      const group=new THREE.Group();
+      let geo;
+      if (type==='lidar_pandar') geo=new THREE.CylinderGeometry(t.w*.6,t.w*.6,t.h*.8,16);
+      else geo=new THREE.BoxGeometry(t.w,t.h,t.d);
+      const mat=new THREE.MeshPhongMaterial({color:t.color,emissive:t.color,emissiveIntensity:0.5,specular:0x888888,shininess:30});
+      const mesh=new THREE.Mesh(geo,mat); mesh.castShadow=true; group.add(mesh);
+      group.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0xffffff,linewidth:5})));
+      const cvs=document.createElement('canvas'),ctx=cvs.getContext('2d');
+      cvs.width=512;cvs.height=128;
+      ctx.fillStyle='rgba(26,26,46,0.9)'; ctx.fillRect(0,0,512,128);
+      ctx.fillStyle='#FFF';ctx.font='bold 48px Arial';ctx.textAlign='center';ctx.fillText(label,256,75);
+      const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(cvs)}));
+      const ls=Math.max(t.w,t.d)*1.2; sprite.scale.set(ls,ls*0.25,1); sprite.position.y=t.h+1; group.add(sprite);
+      group.position.copy(pos);
+      if(tilt){if(tilt.x!==undefined)group.rotation.x=tilt.x;if(tilt.y!==undefined)group.rotation.y=tilt.y;}
+      return {mesh,group};
+    }
+
+    const nodeMeshes={};
+    for(const[id,pos]of Object.entries(POS_3D)){
+      const v=new THREE.Vector3(pos.x,pos.y,pos.z);
+      const dev=createDevice(id,v,LABELS_3D[id]||id,TILTS_3D[id]||null);
+      scene.add(dev.group); nodeMeshes[id]=dev.mesh;
+    }
+    const drawn=new Set();
+    for(const link of LINKS){
+      const key=[link.from,link.to].sort().join('|');
+      if(drawn.has(key))continue; drawn.add(key);
+      const p1=POS_3D[link.from],p2=POS_3D[link.to]; if(!p1||!p2)continue;
+      const v1=new THREE.Vector3(p1.x,p1.y,p1.z),v2=new THREE.Vector3(p2.x,p2.y,p2.z);
+      const curve=new THREE.CatmullRomCurve3([v1,v2]);
+      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.08,8,false),
+        new THREE.MeshStandardMaterial({color:0x6366F1,emissive:0x6366F1,emissiveIntensity:0.9,transparent:true,opacity:0.95})));
+      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,20,0.2,8,false),
+        new THREE.MeshBasicMaterial({color:0x6366F1,transparent:true,opacity:0.35})));
+    }
+
+    const clock=new THREE.Clock();
+    (function animate(){requestAnimationFrame(animate);controls.update();
+      const pulse=Math.sin(clock.elapsedTime*2.5)*0.06;
+      for(const m of Object.values(nodeMeshes))if(m&&m.material)m.material.emissiveIntensity=0.2+pulse;
+      renderer3d.render(scene,camera);
+    })();
+  }
+
+  /* ═══════════════════════════════════════════════
+     LIDAR (right panel)
+     ═══════════════════════════════════════════════ */
+  let lidarScene, lidarCamera, lidarRenderer, lidarControls, lidarPointCloud, lidarGeometry;
+  const MAX_POINTS = 16384;
+  let lidarColorMode = 0;
+  const colorModes = ['Height','Intensity','Distance'];
+  let lidarSizeIdx = 1;
+  const lidarSizes = [0.04, 0.08, 0.15, 0.25];
+  let lidarFrameCount = 0, lidarDisplayFps = 0, lidarLastFpsTime = performance.now();
+  let lidarTotalBytes = 0;
+
+  function heightColor(z) {
+    const t = Math.max(0, Math.min(1, (z + 3) / 8));
+    if (t < 0.25) return [0, t*4, 1];
+    if (t < 0.5) return [0, 1, 1-(t-0.25)*4];
+    if (t < 0.75) return [(t-0.5)*4, 1, 0];
+    return [1, 1-(t-0.75)*4, 0];
+  }
+  function intensityColor(i) { const t=Math.min(1,i/1000); return [t,t*0.8,t*0.3]; }
+  function distanceColor(d) {
+    const t = Math.max(0, Math.min(1, d/30));
+    if (t < 0.25) return [0, t*4, 1];
+    if (t < 0.5) return [0, 1, 1-(t-0.25)*4];
+    if (t < 0.75) return [(t-0.5)*4, 1, 0];
+    return [1, 1-(t-0.75)*4, 0];
+  }
+
+  function initLidar() {
+    const canvas = document.getElementById('lidarCanvas');
+    const container = canvas.parentElement;
+
+    lidarScene = new THREE.Scene();
+    lidarScene.fog = new THREE.Fog(0x0a0a0f, 30, 80);
+
+    lidarCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
+    lidarCamera.position.set(0, 8, 15);
+    lidarCamera.lookAt(0, 0, 0);
+
+    lidarRenderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    lidarRenderer.setClearColor(0x0a0a0f);
+
+    function updateSize() {
+      const w = container.clientWidth, h = container.clientHeight;
+      lidarCamera.aspect = w / h;
+      lidarCamera.updateProjectionMatrix();
+      lidarRenderer.setSize(w, h);
+    }
+    updateSize();
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(container);
+
+    lidarControls = new THREE.OrbitControls(lidarCamera, canvas);
+    lidarControls.enableDamping = true;
+    lidarControls.dampingFactor = 0.08;
+    lidarControls.maxDistance = 80;
+    lidarControls.minDistance = 1;
+
+    const grid = new THREE.GridHelper(40, 40, 0x222233, 0x151520);
+    lidarScene.add(grid);
+    lidarScene.add(new THREE.AxesHelper(2));
+
+    lidarGeometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(MAX_POINTS * 3);
+    const colors = new Float32Array(MAX_POINTS * 3);
+    lidarGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    lidarGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    lidarGeometry.setDrawRange(0, 0);
+
+    const material = new THREE.PointsMaterial({
+      size: 0.08, vertexColors: true, sizeAttenuation: true,
+      transparent: true, opacity: 0.85
+    });
+    lidarPointCloud = new THREE.Points(lidarGeometry, material);
+    lidarScene.add(lidarPointCloud);
+
+    (function animate() {
+      requestAnimationFrame(animate);
+      lidarControls.update();
+      lidarRenderer.render(lidarScene, lidarCamera);
+    })();
+  }
+
+  function updateLidarPoints(data) {
+    const nPoints = Math.min(data.length / 4, MAX_POINTS);
+    lidarTotalBytes += data.byteLength;
+
+    const posAttr = lidarGeometry.getAttribute('position');
+    const colAttr = lidarGeometry.getAttribute('color');
+    const pos = posAttr.array, col = colAttr.array;
+
+    let maxRange = 0;
+    for (let i = 0; i < nPoints; i++) {
+      const x=data[i*4], y=data[i*4+1], z=data[i*4+2], intensity=data[i*4+3];
+      pos[i*3]=y; pos[i*3+1]=z; pos[i*3+2]=-x;
+      const dist=Math.sqrt(x*x+y*y+z*z);
+      if(dist>maxRange)maxRange=dist;
+      let c;
+      if(lidarColorMode===0)c=heightColor(z);
+      else if(lidarColorMode===1)c=intensityColor(intensity);
+      else c=distanceColor(dist);
+      col[i*3]=c[0]; col[i*3+1]=c[1]; col[i*3+2]=c[2];
+    }
+    posAttr.needsUpdate = true;
+    colAttr.needsUpdate = true;
+    lidarGeometry.setDrawRange(0, nPoints);
+    lidarGeometry.computeBoundingSphere();
+
+    lidarFrameCount++;
+    const now = performance.now();
+    if (now - lidarLastFpsTime >= 1000) {
+      lidarDisplayFps = lidarFrameCount;
+      lidarFrameCount = 0;
+      lidarLastFpsTime = now;
+      document.getElementById('lidarBw').textContent = (lidarTotalBytes/1024).toFixed(0)+' KB/s';
+      lidarTotalBytes = 0;
+    }
+    document.getElementById('lidarFps').textContent = lidarDisplayFps;
+    document.getElementById('lidarPts').textContent = nPoints.toLocaleString();
+    document.getElementById('lidarRange').textContent = maxRange.toFixed(1)+' m';
+  }
+
+  /* ── LiDAR WebSocket ── */
+  let lidarConnected = false;
+  function connectLidar() {
+    const proto = location.protocol==='https:'?'wss:':'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}/ws/lidar`);
+    ws.binaryType = 'arraybuffer';
+    ws.onopen = () => {
+      lidarConnected = true;
+      document.getElementById('lidarDot').className = 'dot dot-green';
+      document.getElementById('lidarText').textContent = 'LiDAR Online';
+      document.getElementById('lidarTag').textContent = 'Live';
+    };
+    ws.onmessage = e => {
+      if (typeof e.data === 'string') return;
+      updateLidarPoints(new Float32Array(e.data));
+    };
+    ws.onclose = () => {
+      lidarConnected = false;
+      document.getElementById('lidarDot').className = 'dot dot-orange';
+      document.getElementById('lidarText').textContent = 'Reconnecting...';
+      document.getElementById('lidarTag').textContent = 'Offline';
+      setTimeout(connectLidar, 2000);
+    };
+    ws.onerror = () => ws.close();
+  }
+
+  /* LiDAR controls */
+  document.getElementById('btnLidarColor').addEventListener('click', () => {
+    lidarColorMode = (lidarColorMode + 1) % colorModes.length;
+    document.getElementById('btnLidarColor').textContent = colorModes[lidarColorMode];
+  });
+  document.getElementById('btnLidarSize').addEventListener('click', () => {
+    lidarSizeIdx = (lidarSizeIdx + 1) % lidarSizes.length;
+    lidarPointCloud.material.size = lidarSizes[lidarSizeIdx];
+    document.getElementById('btnLidarSize').textContent = 'Size ' + (lidarSizeIdx+1);
+  });
+  document.getElementById('btnLidarReset').addEventListener('click', () => {
+    lidarCamera.position.set(0, 8, 15);
+    lidarCamera.lookAt(0, 0, 0);
+    lidarControls.target.set(0, 0, 0);
+    lidarControls.update();
+  });
+
+  /* ═══════════════════════════════════════════════
+     SOLVER
+     ═══════════════════════════════════════════════ */
+  let currentResult = null;
+  let boardConnected = false;
+  let glpkInstance = null;
+  let activeSolver = 'greedy';
+
+  /* ── Transport selection ── */
+  const transportSel = document.getElementById('transportSel');
+  const hostPill = document.getElementById('hostPill');
+  const hostInput = document.getElementById('hostInput');
+  transportSel.addEventListener('change', () => {
+    hostPill.style.display = transportSel.value === 'eth' ? 'flex' : 'none';
+    checkBoard();
+  });
+  function getTransport() { return transportSel.value; }
+  function getHost() { return hostInput.value.trim(); }
+
+  function updateBottomBar(result) {
+    if (!result) return;
+    const delays = result.packetRows.map(r => r.e2e);
+    const maxDelay = Math.max(...delays);
+    const maxUtil = Math.max(...Object.values(result.linkUtilization||{}).map(u=>u.total||0));
+    const feasible = result.packetRows.every(r => r.slack >= 0);
+
+    document.getElementById('bcPkts').textContent = result.packetRows.length;
+    document.getElementById('bcDelay').textContent = maxDelay.toFixed(2) + ' µs';
+    document.getElementById('bcUtil').textContent = (maxUtil * 100).toFixed(1) + '%';
+    const fEl = document.getElementById('bcFeasible');
+    fEl.textContent = feasible ? 'All Deadlines Met' : 'Deadline Violated';
+    fEl.style.color = feasible ? 'var(--green)' : 'var(--red)';
+  }
+
+  function renderGanttMini(result) {
+    const container = document.getElementById('ganttMini');
+    if (!result || !result.boardConfigs) { container.innerHTML = ''; return; }
+
+    const cfg = result.boardConfigs['SW_REAR'];
+    if (!cfg) return;
+    const cycle = cfg.cycle_time_us;
+    container.innerHTML = '';
+
+    for (const [linkId, portCfg] of Object.entries(cfg.ports)) {
+      const row = document.createElement('div');
+      row.className = 'gantt-row';
+      const label = document.createElement('div');
+      label.className = 'gantt-label';
+      label.textContent = '\u2192 ' + portCfg.to;
+      row.appendChild(label);
+
+      const bar = document.createElement('div');
+      bar.className = 'gantt-bar-container';
+
+      for (const e of portCfg.entries) {
+        if (e.duration_us <= 0) continue;
+        const left = (e.start_us / cycle * 100);
+        const width = (e.duration_us / cycle * 100);
+        const seg = document.createElement('div');
+        seg.className = 'gantt-segment';
+        seg.style.left = left + '%';
+        seg.style.width = Math.max(width, 0.5) + '%';
+
+        if (e.note.includes('guard')) {
+          seg.style.background = 'var(--orange)';
+          seg.style.opacity = '0.5';
+        } else if (e.note.includes('all-gates-closed')) {
+          seg.style.background = 'rgba(0,0,0,.04)';
+        } else {
+          const flowMatch = e.note.match(/f_\w+/);
+          seg.style.background = flowMatch ? (FLOW_COLORS[flowMatch[0].replace(/_p\d+$/,'')] || 'var(--accent)') : 'var(--accent)';
+          seg.style.opacity = '0.85';
+        }
+        seg.title = `${e.note} (${e.start_us.toFixed(1)}\u2013${e.end_us.toFixed(1)} \u00b5s)`;
+        bar.appendChild(seg);
+      }
+      row.appendChild(bar);
+      container.appendChild(row);
+    }
+  }
+
+  function renderBoardMini(result) {
+    const container = document.getElementById('boardMini');
+    if (!result || !result.boardConfigs) { container.innerHTML = '<div style="font-size:0.65rem;color:var(--text3)">Solve first</div>'; return; }
+
+    const cfg = result.boardConfigs['SW_REAR'];
+    if (!cfg) return;
+
+    // Show Port 1 (ACU_IT) entries
+    const port1 = Object.values(cfg.ports).find(p => p.to === 'ACU_IT');
+    if (!port1) { container.innerHTML = ''; return; }
+    container.innerHTML = '';
+
+    const entries = port1.entries.filter(e => e.duration_us > 0).slice(0, 6);
+    for (const e of entries) {
+      const row = document.createElement('div');
+      row.className = 'board-entry';
+      const bits = e.gate_mask.split('').map((b, i) => {
+        const cls = b === '1' ? 'open' : 'closed';
+        return `<span class="gate-bit-mini ${cls}">${b}</span>`;
+      }).join('');
+      let note = e.note;
+      if (note.length > 20) note = note.substring(0, 18) + '..';
+      row.innerHTML = `
+        <span class="port-num">#${e.index}</span>
+        <span class="gate-bits-mini">${bits}</span>
+        <span>${e.duration_us.toFixed(1)}\u00b5s</span>
+        <span style="color:var(--text3);font-size:0.6rem">${note}</span>
+      `;
+      container.appendChild(row);
+    }
+    if (port1.entries.length > 6) {
+      container.innerHTML += `<div style="font-size:0.6rem;color:var(--text3);margin-top:2px">+${port1.entries.length - 6} more entries</div>`;
+    }
+  }
+
+  function renderSolverMetrics(result, wallMs, method) {
+    const el = document.getElementById('solverMetrics');
+    if (!result) return;
+    const delays = result.packetRows.map(r => r.e2e);
+    const maxDelay = Math.max(...delays);
+    const avgDelay = delays.reduce((a,b)=>a+b,0)/delays.length;
+    const maxUtil = Math.max(...Object.values(result.linkUtilization||{}).map(u=>u.total||0));
+    const feasible = result.packetRows.every(r => r.slack >= 0);
+
+    el.innerHTML = `
+      <div class="metric"><div class="label">Solved in</div><div class="value">${wallMs} ms</div></div>
+      <div class="metric"><div class="label">Packets</div><div class="value">${result.packetRows.length}</div></div>
+      <div class="metric"><div class="label">Max Delay</div><div class="value">${maxDelay.toFixed(2)} \u00b5s</div></div>
+      <div class="metric"><div class="label">Avg Delay</div><div class="value">${avgDelay.toFixed(2)} \u00b5s</div></div>
+      <div class="metric"><div class="label">Max Util</div><div class="value">${(maxUtil*100).toFixed(1)}%</div></div>
+      <div class="metric"><div class="label">Feasible</div><div class="value" style="color:${feasible?'var(--green)':'var(--red)'}">${feasible?'Yes':'No'}</div></div>
+    `;
+  }
+
+  function solveAndRender(method) {
+    const status = document.getElementById('solverStatus');
+    try {
+      const model = deep(TOPOLOGY);
+      const t0 = performance.now();
+      if (method === 'ilp') {
+        if (!glpkInstance) { status.textContent = 'Loading GLPK WASM...'; return; }
+        solveILP(model, glpkInstance, { tmlim: 15 }).then(r => {
+          currentResult = r;
+          const wallMs = Math.round(performance.now() - t0);
+          renderSolverMetrics(r, wallMs, 'ILP');
+          updateBottomBar(r);
+          renderGanttMini(r);
+          renderBoardMini(r);
+          updatePushBtn();
+          status.innerHTML = `<span style="color:var(--green)">ILP solved in ${wallMs} ms</span>`;
+        }).catch(e => { status.textContent = 'ILP error: ' + e.message; });
+        return;
+      }
+      const result = solveGreedy(model);
+      const wallMs = Math.round(performance.now() - t0);
+      currentResult = result;
+      renderSolverMetrics(result, wallMs, 'Greedy');
+      updateBottomBar(result);
+      renderGanttMini(result);
+      renderBoardMini(result);
+      updatePushBtn();
+      status.innerHTML = `<span style="color:var(--green)">Greedy solved in ${wallMs} ms</span>`;
+    } catch (e) {
+      status.textContent = 'Error: ' + e.message;
+      console.error(e);
+    }
+  }
+
+  /* ── Solver buttons ── */
+  document.getElementById('btnGreedy').addEventListener('click', () => {
+    activeSolver = 'greedy';
+    document.getElementById('btnGreedy').classList.add('active');
+    document.getElementById('btnILP').classList.remove('active');
+    document.getElementById('engineTag').textContent = 'Greedy';
+    solveAndRender('greedy');
+  });
+  document.getElementById('btnILP').addEventListener('click', () => {
+    activeSolver = 'ilp';
+    document.getElementById('btnILP').classList.add('active');
+    document.getElementById('btnGreedy').classList.remove('active');
+    document.getElementById('engineTag').textContent = 'ILP';
+    solveAndRender('ilp');
+  });
+
+  /* ═══════════════════════════════════════════════
+     BOARD
+     ═══════════════════════════════════════════════ */
+  function updatePushBtn() {
+    document.getElementById('btnPush').disabled = !currentResult || !boardConnected;
+  }
+
+  async function checkBoard() {
+    const transport = getTransport();
+    try {
+      let url = `/api/board/status?transport=${transport}`;
+      if (transport === 'eth') url += `&host=${encodeURIComponent(getHost())}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      boardConnected = data.connected;
+      document.getElementById('boardDot').className = 'dot ' + (data.connected ? 'dot-green' : 'dot-off');
+      if (transport === 'serial') {
+        document.getElementById('boardText').textContent = data.connected ? 'LAN9662 ' + data.device : 'Board offline';
+      } else {
+        document.getElementById('boardText').textContent = data.connected ? 'LAN9662 ' + getHost() : 'Unreachable';
+      }
+    } catch {
+      boardConnected = false;
+      document.getElementById('boardDot').className = 'dot dot-off';
+      document.getElementById('boardText').textContent = 'Server offline';
+    }
+    updatePushBtn();
+  }
+
+  document.getElementById('btnPush').addEventListener('click', async () => {
+    if (!currentResult?.boardConfigs) return;
+    const btn = document.getElementById('btnPush');
+    const status = document.getElementById('solverStatus');
+    btn.disabled = true; btn.textContent = 'Pushing...';
+    try {
+      const transport = getTransport();
+      const pushBody = {
+        boardConfigs: currentResult.boardConfigs,
+        portMap: { l_swrear_acu: '1', l_swrear_swfl: '2' },
+        transport
+      };
+      if (transport === 'serial') pushBody.device = '/dev/ttyACM0';
+      else pushBody.host = getHost();
+      const res = await fetch('/api/gcl/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pushBody)
+      });
+      const data = await res.json();
+      if (data.error) {
+        status.innerHTML = `<span style="color:var(--red)">${data.error}</span>`;
+      } else {
+        const ok = data.results.filter(r=>r.success).length;
+        status.innerHTML = `<span style="color:var(--green)">${ok} port(s) configured successfully</span>`;
+      }
+    } catch (e) {
+      status.innerHTML = `<span style="color:var(--red)">Push failed: ${e.message}</span>`;
+    }
+    btn.textContent = 'Push to Board';
+    updatePushBtn();
+  });
+
+  /* ═══════════════════════════════════════════════
+     BOOT
+     ═══════════════════════════════════════════════ */
+  init3D();
+  initLidar();
+  connectLidar();
+  solveAndRender('greedy');
+  checkBoard();
+  setInterval(checkBoard, 5000);
+
+  // Load GLPK in background
+  (async () => {
+    try {
+      const GLPK = (await import('./vendor/glpk.js')).default;
+      glpkInstance = await GLPK();
+    } catch (e) { console.warn('GLPK:', e); }
+  })();
+  </script>
+</body>
+</html>

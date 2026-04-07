@@ -56,6 +56,7 @@ httpServer.listen(port, () => {
   console.log(`  Local:   http://localhost:${port}`);
   console.log(`  Solver:  http://localhost:${port}/solver.html`);
   console.log(`  Board:   http://localhost:${port}/board.html`);
+  console.log(`  Dash:    http://localhost:${port}/dashboard.html`);
   console.log(`  LiDAR:   http://localhost:${port}/lidar.html`);
   console.log(`  API:     http://localhost:${port}/api/board/status\n`);
 });
