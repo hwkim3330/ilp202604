@@ -458,6 +458,10 @@
         <div class="bc-label">LiDAR Traffic vs TAS Allocation</div>
         <div id="lidarTas"></div>
       </div>
+      <div class="bottom-card" style="flex:2;">
+        <div class="bc-label">Board Live TAS (from device)</div>
+        <div id="boardLive" style="font-size:0.6rem;color:var(--text3)">Reading...</div>
+      </div>
     </div>
   </div>
 
@@ -853,10 +857,10 @@
 
   function updateBottomBar(result) {
     if (!result) return;
-    const delays = result.packetRows.map(r => r.e2e);
+    const delays = result.packetRows.map(r => r.e2e_delay_us);
     const maxDelay = Math.max(...delays);
-    const maxUtil = Math.max(...Object.values(result.linkUtilization||{}).map(u=>u.total||0));
-    const feasible = result.packetRows.every(r => r.slack >= 0);
+    const maxUtil = (result.worst_util_percent || 0) / 100;
+    const feasible = result.packetRows.every(r => r.slack_us == null || r.slack_us >= 0);
 
     document.getElementById('bcPkts').textContent = result.packetRows.length;
     document.getElementById('bcDelay').textContent = maxDelay.toFixed(2) + ' µs';
@@ -913,49 +917,63 @@
     }
   }
 
-  function renderBoardMini(result) {
-    const container = document.getElementById('boardMini');
-    if (!result || !result.boardConfigs) { container.innerHTML = '<div style="font-size:0.65rem;color:var(--text3)">Solve first</div>'; return; }
+  /* ── Read live board TAS and show in bottom panel ── */
+  async function readBoardTas() {
+    const container = document.getElementById('boardLive');
+    if (!container) return;
+    try {
+      const transport = getTransport();
+      let url = `/api/gcl/read?transport=${transport}`;
+      if (transport === 'serial') url += '&device=/dev/ttyACM0';
+      else url += `&host=${encodeURIComponent(getHost())}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.error) { container.innerHTML = `<div style="font-size:0.6rem;color:var(--red)">${data.error}</div>`; return; }
 
-    const cfg = result.boardConfigs['SW_REAR'];
-    if (!cfg) return;
-
-    // Show Port 1 (ACU_IT) entries
-    const port1 = Object.values(cfg.ports).find(p => p.to === 'ACU_IT');
-    if (!port1) { container.innerHTML = ''; return; }
-    container.innerHTML = '';
-
-    const entries = port1.entries.filter(e => e.duration_us > 0).slice(0, 6);
-    for (const e of entries) {
-      const row = document.createElement('div');
-      row.className = 'board-entry';
-      const bits = e.gate_mask.split('').map((b, i) => {
-        const cls = b === '1' ? 'open' : 'closed';
-        return `<span class="gate-bit-mini ${cls}">${b}</span>`;
-      }).join('');
-      let note = e.note;
-      if (note.length > 20) note = note.substring(0, 18) + '..';
-      row.innerHTML = `
-        <span class="port-num">#${e.index}</span>
-        <span class="gate-bits-mini">${bits}</span>
-        <span>${e.duration_us.toFixed(1)}\u00b5s</span>
-        <span style="color:var(--text3);font-size:0.6rem">${note}</span>
-      `;
-      container.appendChild(row);
-    }
-    if (port1.entries.length > 6) {
-      container.innerHTML += `<div style="font-size:0.6rem;color:var(--text3);margin-top:2px">+${port1.entries.length - 6} more entries</div>`;
+      let html = '';
+      for (const [portName, pv] of Object.entries(data.ports)) {
+        const enabled = pv.gateEnabled;
+        const ct = pv.adminCycleTime;
+        const cycleUs = ct ? ct.numerator / 1000 : 0;
+        const entries = pv.adminEntries || [];
+        html += `<div style="font-size:0.62rem;margin-bottom:4px;">
+          <strong style="color:var(--accent)">Port ${portName}</strong>
+          <span style="color:${enabled?'var(--green)':'var(--text3)'}">${enabled?'TAS ON':'OFF'}</span>
+          <span style="color:var(--text3)">${cycleUs}µs cycle, ${entries.length} entries</span>
+        </div>`;
+        // Mini gantt for this port
+        if (entries.length > 0 && cycleUs > 0) {
+          html += '<div style="height:10px;background:var(--bg);border-radius:4px;border:1px solid var(--border);position:relative;overflow:hidden;margin-bottom:6px;">';
+          let pos = 0;
+          const TC_COLORS = ['#264653','#2A9D8F','#76B7B2','#457B9D','#D4A574','#E76F51','#E9C46A','#F28E2B'];
+          for (const e of entries) {
+            const dur = e.timeInterval / 1000;
+            const w = dur / cycleUs * 100;
+            const mask = e.gateStates;
+            // Find highest open TC for color
+            let tc = -1;
+            for (let b = 7; b >= 0; b--) { if (mask & (1 << b)) { tc = b; break; } }
+            const color = tc >= 0 ? TC_COLORS[tc] : 'rgba(0,0,0,.03)';
+            html += `<div style="position:absolute;left:${pos}%;width:${Math.max(w,0.3)}%;height:100%;background:${color};opacity:0.8;border-radius:2px;" title="TC${tc} ${dur.toFixed(1)}µs mask=${mask.toString(2).padStart(8,'0')}"></div>`;
+            pos += w;
+          }
+          html += '</div>';
+        }
+      }
+      container.innerHTML = html || '<div style="font-size:0.6rem;color:var(--text3)">No TAS data</div>';
+    } catch (e) {
+      container.innerHTML = `<div style="font-size:0.6rem;color:var(--text3)">Board read failed</div>`;
     }
   }
 
   function renderSolverMetrics(result, wallMs, method) {
     const el = document.getElementById('solverMetrics');
     if (!result) return;
-    const delays = result.packetRows.map(r => r.e2e);
+    const delays = result.packetRows.map(r => r.e2e_delay_us);
     const maxDelay = Math.max(...delays);
     const avgDelay = delays.reduce((a,b)=>a+b,0)/delays.length;
-    const maxUtil = Math.max(...Object.values(result.linkUtilization||{}).map(u=>u.total||0));
-    const feasible = result.packetRows.every(r => r.slack >= 0);
+    const maxUtil = (result.worst_util_percent || 0) / 100;
+    const feasible = result.packetRows.every(r => r.slack_us == null || r.slack_us >= 0);
 
     el.innerHTML = `
       <div class="metric"><div class="label">Solved in</div><div class="value">${wallMs} ms</div></div>
@@ -980,7 +998,7 @@
           renderSolverMetrics(r, wallMs, 'ILP');
           updateBottomBar(r);
           renderGanttMini(r);
-          renderBoardMini(r);
+          // board mini removed
           updatePushBtn();
           status.innerHTML = `<span style="color:var(--green)">ILP solved in ${wallMs} ms</span>`;
         }).catch(e => { status.textContent = 'ILP error: ' + e.message; });
@@ -992,7 +1010,7 @@
       renderSolverMetrics(result, wallMs, 'Greedy');
       updateBottomBar(result);
       renderGanttMini(result);
-      renderBoardMini(result);
+      // board mini removed
       updatePushBtn();
       status.innerHTML = `<span style="color:var(--green)">Greedy solved in ${wallMs} ms</span>`;
     } catch (e) {
@@ -1247,6 +1265,8 @@
   solveAndRender('greedy');
   checkBoard();
   setInterval(checkBoard, 5000);
+  // Read live board TAS after a short delay (board read takes ~30s)
+  setTimeout(readBoardTas, 3000);
 
   // Load GLPK in background
   (async () => {
