@@ -221,4 +221,47 @@ router.get('/gcl/read', async (req, res) => {
   }
 });
 
+/* ── POST /api/gcl/push-port ── Direct per-port TAS push */
+router.post('/gcl/push-port', async (req, res) => {
+  const {
+    port,
+    cycleUs = 500,
+    entries = [],
+    device = '/dev/ttyACM0',
+    transport = 'serial'
+  } = req.body;
+
+  if (!port || !entries.length) {
+    return res.status(400).json({ error: 'port and entries are required' });
+  }
+  if (!fs.existsSync(device)) {
+    return res.status(400).json({ error: `Device not found: ${device}` });
+  }
+
+  try {
+    // Convert to solver entry format for gclToYang
+    const solverEntries = entries.map(e => ({
+      gate_mask: e.gateStates.toString(2).padStart(8, '0'),
+      duration_us: e.durationUs
+    }));
+
+    const yangItems = gclToYang(String(port), solverEntries, cycleUs);
+    const yamlStr = yaml.dump(yangItems, { lineWidth: -1, quotingType: "'", forceQuotes: false });
+
+    const tmpFile = path.join(os.tmpdir(), `tas-port${port}-${Date.now()}.yaml`);
+    fs.writeFileSync(tmpFile, yamlStr);
+
+    const args = ['patch', tmpFile, '-d', device, '--transport', transport];
+    const { stdout, stderr } = await ketiTsn(args);
+    fs.unlinkSync(tmpFile);
+
+    const output = stdout + stderr;
+    const success = output.includes('Success') || output.includes('2.04') || output.includes('success') || !output.includes('Error');
+
+    res.json({ port, success, entries: entries.length, output: output.trim() });
+  } catch (err) {
+    res.status(500).json({ error: err.stderr || err.message });
+  }
+});
+
 export default router;
