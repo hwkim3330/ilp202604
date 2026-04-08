@@ -120,8 +120,16 @@ router.get('/board/:boardId/gcl', async (req, res) => {
   if (!board) return res.status(404).json({ error: `Board not found: ${req.params.boardId}` });
 
   try {
-    const args = ['get', '--transport', 'eth', '--host', board.host];
-    const { stdout } = await ketiTsn(args, 90000);
+    // Try ethernet first, fall back to serial if eth fails
+    let stdout;
+    try {
+      const ethResult = await ketiTsn(['get', '--transport', 'eth', '--host', board.host], 30000);
+      stdout = ethResult.stdout;
+    } catch {
+      // Fallback to serial
+      const serialResult = await ketiTsn(['get', '--transport', 'serial', '-d', '/dev/ttyACM0'], 90000);
+      stdout = serialResult.stdout;
+    }
 
     const configStart = stdout.indexOf('--- Configuration ---');
     const configYaml = configStart >= 0 ? stdout.substring(configStart + 22) : stdout;

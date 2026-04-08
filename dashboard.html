@@ -404,39 +404,48 @@
       </div>
     </div>
 
-    <!-- Bottom Bar -->
-    <div class="bottom-bar">
-      <div class="bottom-card">
-        <div class="bc-label">Packets / Cycle</div>
+    <!-- Bottom Bar: 2-row layout -->
+    <div class="bottom-bar" style="flex-wrap:wrap;">
+      <!-- Row 1: Stats + Gantt -->
+      <div class="bottom-card" style="flex:0 0 auto;min-width:80px;">
+        <div class="bc-label">Pkts/Cycle</div>
         <div class="bc-val" id="bcPkts" style="color:var(--accent)">—</div>
       </div>
-      <div class="bottom-card">
-        <div class="bc-label">Max E2E Delay</div>
+      <div class="bottom-card" style="flex:0 0 auto;min-width:80px;">
+        <div class="bc-label">Max Delay</div>
         <div class="bc-val" id="bcDelay" style="color:var(--orange)">—</div>
       </div>
-      <div class="bottom-card">
-        <div class="bc-label">Max Link Util</div>
+      <div class="bottom-card" style="flex:0 0 auto;min-width:80px;">
+        <div class="bc-label">Max Util</div>
         <div class="bc-val" id="bcUtil" style="color:var(--cyan)">—</div>
       </div>
-      <div class="bottom-card">
-        <div class="bc-label">Deadline Check</div>
+      <div class="bottom-card" style="flex:0 0 auto;min-width:80px;">
+        <div class="bc-label">Deadline</div>
         <div class="bc-val" id="bcFeasible" style="color:var(--text3)">—</div>
       </div>
-      <div class="bottom-card gantt-mini">
-        <div class="bc-label">GCL Timeline — SW_REAR Egress (500 µs cycle)</div>
+      <div class="bottom-card gantt-mini" style="flex:4;">
+        <div class="bc-label">GCL Timeline — All Switches (500 µs cycle)</div>
         <div id="ganttMini"></div>
       </div>
-      <div class="bottom-card multiboard">
-        <div class="bc-label">Multi-Board Control</div>
+
+      <!-- Row 2: Board Topology + Config Table + LiDAR -->
+      <div class="bottom-card" style="flex:2;min-height:120px;">
+        <div class="bc-label">Board Topology</div>
+        <svg id="topoSvg" width="100%" height="100" viewBox="0 0 440 100" style="margin-top:4px;">
+          <!-- Topology drawn by JS -->
+        </svg>
+      </div>
+      <div class="bottom-card multiboard" style="flex:2;">
+        <div class="bc-label">Board Control</div>
         <div id="multiBoard"></div>
       </div>
-      <div class="bottom-card lidar-tas">
-        <div class="bc-label">LiDAR Traffic vs TAS Allocation</div>
-        <div id="lidarTas"></div>
+      <div class="bottom-card" style="flex:3;overflow-y:auto;max-height:160px;">
+        <div class="bc-label">Board Config Table</div>
+        <div id="boardConfigTable" style="font-size:0.6rem;color:var(--text2)">Solving...</div>
       </div>
-      <div class="bottom-card" style="flex:2;">
-        <div class="bc-label">Board Live TAS (from device)</div>
-        <div id="boardLive" style="font-size:0.6rem;color:var(--text3)">Reading...</div>
+      <div class="bottom-card lidar-tas" style="flex:2;">
+        <div class="bc-label">LiDAR vs TAS</div>
+        <div id="lidarTas"></div>
       </div>
     </div>
   </div>
@@ -852,48 +861,147 @@
   function renderGanttMini(result) {
     const container = document.getElementById('ganttMini');
     if (!result || !result.boardConfigs) { container.innerHTML = ''; return; }
-
-    const cfg = result.boardConfigs['SW_REAR'];
-    if (!cfg) return;
-    const cycle = cfg.cycle_time_us;
     container.innerHTML = '';
 
-    for (const [linkId, portCfg] of Object.entries(cfg.ports)) {
-      const row = document.createElement('div');
-      row.className = 'gantt-row';
-      const label = document.createElement('div');
-      label.className = 'gantt-label';
-      label.textContent = '\u2192 ' + portCfg.to;
-      row.appendChild(label);
+    for (const [swId, cfg] of Object.entries(result.boardConfigs)) {
+      const cycle = cfg.cycle_time_us;
+      for (const [linkId, portCfg] of Object.entries(cfg.ports)) {
+        const row = document.createElement('div');
+        row.className = 'gantt-row';
+        const label = document.createElement('div');
+        label.className = 'gantt-label';
+        label.textContent = swId.replace('SW_','') + '\u2192' + portCfg.to;
+        label.style.fontSize = '0.56rem';
+        row.appendChild(label);
 
-      const bar = document.createElement('div');
-      bar.className = 'gantt-bar-container';
+        const bar = document.createElement('div');
+        bar.className = 'gantt-bar-container';
 
-      for (const e of portCfg.entries) {
-        if (e.duration_us <= 0) continue;
-        const left = (e.start_us / cycle * 100);
-        const width = (e.duration_us / cycle * 100);
-        const seg = document.createElement('div');
-        seg.className = 'gantt-segment';
-        seg.style.left = left + '%';
-        seg.style.width = Math.max(width, 0.5) + '%';
+        for (const e of portCfg.entries) {
+          if (e.duration_us <= 0) continue;
+          const left = (e.start_us / cycle * 100);
+          const width = (e.duration_us / cycle * 100);
+          const seg = document.createElement('div');
+          seg.className = 'gantt-segment';
+          seg.style.left = left + '%';
+          seg.style.width = Math.max(width, 0.5) + '%';
 
-        if (e.note.includes('guard')) {
-          seg.style.background = 'var(--orange)';
-          seg.style.opacity = '0.5';
-        } else if (e.note.includes('all-gates-closed')) {
-          seg.style.background = 'rgba(0,0,0,.04)';
-        } else {
-          const flowMatch = e.note.match(/f_\w+/);
-          seg.style.background = flowMatch ? (FLOW_COLORS[flowMatch[0].replace(/_p\d+$/,'')] || 'var(--accent)') : 'var(--accent)';
-          seg.style.opacity = '0.85';
+          if (e.note.includes('guard')) {
+            seg.style.background = 'var(--orange)';
+            seg.style.opacity = '0.5';
+          } else if (e.note.includes('all-gates-closed')) {
+            seg.style.background = 'rgba(0,0,0,.04)';
+          } else {
+            const flowMatch = e.note.match(/f_\w+/);
+            seg.style.background = flowMatch ? (FLOW_COLORS[flowMatch[0].replace(/_p\d+$/,'')] || 'var(--accent)') : 'var(--accent)';
+            seg.style.opacity = '0.85';
+          }
+          seg.title = `${swId} ${e.note} (${e.start_us.toFixed(1)}\u2013${e.end_us.toFixed(1)} \u00b5s)`;
+          bar.appendChild(seg);
         }
-        seg.title = `${e.note} (${e.start_us.toFixed(1)}\u2013${e.end_us.toFixed(1)} \u00b5s)`;
-        bar.appendChild(seg);
+        row.appendChild(bar);
+        container.appendChild(row);
       }
-      row.appendChild(bar);
-      container.appendChild(row);
     }
+  }
+
+  /* ── Board Topology SVG (bottom panel) ── */
+  function renderTopoSvg() {
+    const svg = document.getElementById('topoSvg');
+    if (!svg) return;
+    const SW = [
+      { id: 'SW_FL',   x: 80,  y: 50, label: 'SW_FL', color: '#6366F1' },
+      { id: 'SW_FR',   x: 220, y: 50, label: 'SW_FR', color: '#6366F1' },
+      { id: 'SW_REAR', x: 150, y: 15, label: 'SW_REAR', color: '#818CF8' },
+    ];
+    const EP = [
+      { id: 'ACU_IT',  x: 360, y: 15, label: 'ACU', color: '#dc2626' },
+      { id: 'PC',      x: 360, y: 80, label: 'PC', color: '#059669' },
+      { id: 'LiDAR-A', x: 20,  y: 15, label: 'LiDAR', color: '#F28E2B' },
+    ];
+    const EDGES = [
+      ['SW_FL','SW_FR'], ['SW_FL','SW_REAR'], ['SW_FR','SW_REAR'],
+      ['SW_REAR','ACU_IT'], ['SW_FL','PC'], ['LiDAR-A','SW_REAR']
+    ];
+
+    const allNodes = [...SW, ...EP];
+    const nodeMap = {};
+    allNodes.forEach(n => nodeMap[n.id] = n);
+
+    let html = '';
+    // Draw edges
+    for (const [a, b] of EDGES) {
+      const na = nodeMap[a], nb = nodeMap[b];
+      if (!na || !nb) continue;
+      const isSwLink = a.startsWith('SW') && b.startsWith('SW');
+      html += `<line x1="${na.x}" y1="${na.y}" x2="${nb.x}" y2="${nb.y}"
+        stroke="${isSwLink ? '#6366F1' : '#ccc'}" stroke-width="${isSwLink ? 2 : 1}"
+        stroke-dasharray="${isSwLink ? '' : '4,3'}" opacity="0.6"/>`;
+    }
+    // Draw nodes
+    for (const n of allNodes) {
+      const isSwitch = n.id.startsWith('SW');
+      const online = boardStatus[n.id];
+      const r = isSwitch ? 16 : 12;
+      const fill = online ? n.color : (isSwitch ? '#e5e7eb' : n.color);
+      const opacity = (isSwitch && !online) ? 0.4 : 0.9;
+      if (isSwitch) {
+        html += `<rect x="${n.x-r}" y="${n.y-r/1.5}" width="${r*2}" height="${r*1.3}" rx="4"
+          fill="${fill}" opacity="${opacity}" stroke="${online?'#4f46e5':'#d1d5db'}" stroke-width="1.5"/>`;
+        // Online indicator
+        if (online) html += `<circle cx="${n.x+r-3}" cy="${n.y-r/1.5+4}" r="3" fill="#34c759"/>`;
+      } else {
+        html += `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="${fill}" opacity="${opacity}"/>`;
+      }
+      html += `<text x="${n.x}" y="${n.y + r + 12}" text-anchor="middle"
+        font-size="9" font-weight="600" fill="#6e6e73" font-family="Inter,sans-serif">${n.label}</text>`;
+    }
+    svg.innerHTML = html;
+  }
+
+  /* ── Board Config Table (solver result → per-switch GCL) ── */
+  function renderBoardConfigTable(result) {
+    const container = document.getElementById('boardConfigTable');
+    if (!result?.boardConfigs) { container.innerHTML = '<span style="color:var(--text3)">No config</span>'; return; }
+
+    const TC_COLORS = ['#264653','#2A9D8F','#76B7B2','#457B9D','#D4A574','#E76F51','#E9C46A','#F28E2B'];
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:0.6rem;">';
+    html += '<tr style="border-bottom:1px solid var(--border);"><th style="text-align:left;padding:2px 6px;color:var(--text3);">Switch</th><th style="text-align:left;padding:2px 6px;color:var(--text3);">Port</th><th style="text-align:left;padding:2px 6px;color:var(--text3);">→ Dest</th><th style="text-align:left;padding:2px 6px;color:var(--text3);">Entries</th><th style="text-align:left;padding:2px 6px;color:var(--text3);">GCL</th><th style="text-align:center;padding:2px 6px;color:var(--text3);">Status</th></tr>';
+
+    for (const [swId, swCfg] of Object.entries(result.boardConfigs)) {
+      const cycle = swCfg.cycle_time_us;
+      let portIdx = 0;
+      for (const [linkId, portCfg] of Object.entries(swCfg.ports)) {
+        portIdx++;
+        const online = boardStatus[swId];
+        // Mini GCL bar
+        let gclBar = '<div style="display:flex;height:8px;border-radius:3px;overflow:hidden;border:1px solid var(--border);min-width:80px;">';
+        for (const e of portCfg.entries) {
+          if (e.duration_us <= 0) continue;
+          const w = (e.duration_us / cycle * 100);
+          let color = 'rgba(0,0,0,.04)';
+          if (!e.note.includes('guard') && !e.note.includes('all-gates-closed')) {
+            const mask = parseInt(e.gate_mask, 2);
+            for (let b = 7; b >= 0; b--) { if (mask & (1 << b)) { color = TC_COLORS[b]; break; } }
+          } else if (e.note.includes('guard')) {
+            color = 'var(--orange)';
+          }
+          gclBar += `<div style="width:${Math.max(w,1)}%;background:${color};opacity:0.8;" title="${e.note} ${e.duration_us.toFixed(1)}µs"></div>`;
+        }
+        gclBar += '</div>';
+
+        html += `<tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:3px 6px;font-weight:700;color:var(--accent);">${portIdx===1?swId:''}</td>
+          <td style="padding:3px 6px;">P${portIdx}</td>
+          <td style="padding:3px 6px;color:var(--text2);">${portCfg.to}</td>
+          <td style="padding:3px 6px;">${portCfg.entries.length}</td>
+          <td style="padding:3px 6px;">${gclBar}</td>
+          <td style="padding:3px 6px;text-align:center;"><div class="dot ${online?'dot-green':'dot-off'}" style="display:inline-block;"></div></td>
+        </tr>`;
+      }
+    }
+    html += '</table>';
+    container.innerHTML = html;
   }
 
   /* ── Read live board TAS from all connected boards ── */
@@ -980,7 +1088,8 @@
           renderSolverMetrics(r, wallMs, 'ILP');
           updateBottomBar(r);
           renderGanttMini(r);
-          // board mini removed
+          renderBoardConfigTable(r);
+          renderTopoSvg();
           updatePushBtn();
           status.innerHTML = `<span style="color:var(--green)">ILP solved in ${wallMs} ms</span>`;
         }).catch(e => { status.textContent = 'ILP error: ' + e.message; });
@@ -992,7 +1101,8 @@
       renderSolverMetrics(result, wallMs, 'Greedy');
       updateBottomBar(result);
       renderGanttMini(result);
-      // board mini removed
+      renderBoardConfigTable(result);
+      renderTopoSvg();
       updatePushBtn();
       status.innerHTML = `<span style="color:var(--green)">Greedy solved in ${wallMs} ms</span>`;
     } catch (e) {
@@ -1057,6 +1167,8 @@
       }
     }
     updatePushBtn();
+    renderTopoSvg();
+    if (currentResult) renderBoardConfigTable(currentResult);
   }
 
   document.getElementById('btnPush').addEventListener('click', async () => {
