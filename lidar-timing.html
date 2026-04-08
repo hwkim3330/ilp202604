@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KETI TSN — LiDAR Timing Analysis</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f; --card: rgba(255,255,255,.05); --border: rgba(255,255,255,.08);
+      --text: #f5f5f7; --text2: rgba(255,255,255,.55); --text3: rgba(255,255,255,.3);
+      --accent: #6366F1; --green: #30d158; --orange: #ff9f0a; --red: #ff453a;
+      --yellow: #ffd60a; --cyan: #06b6d4;
+    }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; -webkit-font-smoothing: antialiased; }
+
+    .header { padding: 20px 24px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--border); }
+    .header h1 { font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em; }
+    .header .sub { font-size: 0.7rem; color: var(--text2); }
+    .chip { display: flex; align-items: center; gap: 5px; background: var(--card); border: 1px solid var(--border); padding: 4px 12px; border-radius: 100px; font-size: 0.68rem; font-weight: 500; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot-off { background: var(--text3); }
+    .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* Stats row */
+    .stats-row { display: flex; gap: 0; border-bottom: 1px solid var(--border); }
+    .stat { flex: 1; padding: 14px 16px; text-align: center; border-right: 1px solid var(--border); }
+    .stat:last-child { border-right: none; }
+    .stat-val { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .stat-label { font-size: 0.58rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+
+    /* Oscilloscope */
+    .scope-section { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+    .scope-title { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 10px; }
+    .scope-canvas { width: 100%; height: 120px; display: block; border-radius: 8px; background: rgba(255,255,255,.02); border: 1px solid var(--border); }
+
+    /* TAS overlay */
+    .tas-section { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+    .tas-canvas { width: 100%; height: 80px; display: block; border-radius: 8px; background: rgba(255,255,255,.02); border: 1px solid var(--border); }
+
+    /* Frame detail */
+    .frame-section { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+    .frame-canvas { width: 100%; height: 100px; display: block; border-radius: 8px; background: rgba(255,255,255,.02); border: 1px solid var(--border); }
+
+    /* Auto TAS */
+    .auto-section { padding: 16px 24px; border-bottom: 1px solid var(--border); }
+    .auto-config { background: rgba(99,102,241,.05); border: 1px solid rgba(99,102,241,.15); border-radius: 10px; padding: 12px 16px; font-size: 0.72rem; }
+    .auto-entry { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+    .auto-bar { height: 14px; border-radius: 4px; min-width: 4px; }
+    .btn { background: var(--accent); border: none; color: #fff; padding: 8px 20px; border-radius: 8px; font-size: 0.78rem; font-weight: 600; cursor: pointer; font-family: inherit; margin-top: 10px; }
+    .btn:hover { opacity: .9; }
+    .btn:disabled { opacity: .3; cursor: not-allowed; }
+
+    .nav { padding: 16px 24px; display: flex; gap: 8px; }
+    .nav a { color: var(--text2); text-decoration: none; font-size: 0.72rem; font-weight: 600; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); }
+    .nav a:hover { color: var(--text); border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>LiDAR Timing Analysis</h1>
+      <div class="sub">Real-time packet timing + TAS alignment</div>
+    </div>
+    <span style="flex:1"></span>
+    <div class="chip"><div class="dot dot-off" id="statusDot"></div><span id="statusText">Connecting</span></div>
+    <div class="chip">Pkts <span class="val" id="pktCount">0</span></div>
+    <div class="chip">Frames <span class="val" id="frameCount">0</span></div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat"><div class="stat-val" id="sFps" style="color:var(--accent)">—</div><div class="stat-label">FPS</div></div>
+    <div class="stat"><div class="stat-val" id="sPeriod">—</div><div class="stat-label">Frame Period</div></div>
+    <div class="stat"><div class="stat-val" id="sJitter" style="color:var(--green)">—</div><div class="stat-label">Jitter</div></div>
+    <div class="stat"><div class="stat-val" id="sPkts">—</div><div class="stat-label">Pkts/Frame</div></div>
+    <div class="stat"><div class="stat-val" id="sBw">—</div><div class="stat-label">Bandwidth</div></div>
+    <div class="stat"><div class="stat-val" id="sPktInt">—</div><div class="stat-label">Pkt Interval</div></div>
+  </div>
+
+  <!-- Oscilloscope: packet arrivals over time -->
+  <div class="scope-section">
+    <div class="scope-title">Packet Arrivals (last 500ms)</div>
+    <canvas class="scope-canvas" id="scopeCanvas"></canvas>
+  </div>
+
+  <!-- Frame-level: one frame zoomed in -->
+  <div class="frame-section">
+    <div class="scope-title">Single Frame Detail (32 packets)</div>
+    <canvas class="frame-canvas" id="frameCanvas"></canvas>
+  </div>
+
+  <!-- TAS overlay -->
+  <div class="tas-section">
+    <div class="scope-title">TAS Gate Schedule vs LiDAR Traffic (per cycle)</div>
+    <canvas class="tas-canvas" id="tasCanvas"></canvas>
+  </div>
+
+  <!-- Auto TAS config -->
+  <div class="auto-section">
+    <div class="scope-title">Auto-Generated TAS Configuration</div>
+    <div class="auto-config" id="autoConfig">Loading profile...</div>
+    <button class="btn" id="btnPush" disabled>Push to Board (SW_REAR)</button>
+  </div>
+
+  <div class="nav">
+    <a href="lidar-app.html">Safety Monitor</a>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="board.html">Board Config</a>
+    <a href="lidar.html">Raw Cloud</a>
+  </div>
+
+  <script>
+    // ── State ──
+    const packets = []; // { t, fid, sz, pts, newFrame } last 2000
+    const MAX_PKTS = 2000;
+    let totalPkts = 0, totalFrames = 0;
+    let profile = null;
+    let autoTas = null;
+
+    const TC_COLORS = ['#8e8e93','#ff3b30','#34c759','#ff9500','#af52de','#5856d6','#32ade6','#007aff'];
+
+    // ── WebSocket for timing ──
+    function connectTiming() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${location.host}/ws/lidar-timing-a`);
+      ws.onopen = () => {
+        document.getElementById('statusDot').className = 'dot dot-green';
+        document.getElementById('statusText').textContent = 'Live';
+      };
+      ws.onmessage = (e) => {
+        const pkt = JSON.parse(e.data);
+        packets.push(pkt);
+        if (packets.length > MAX_PKTS) packets.shift();
+        totalPkts++;
+        if (pkt.newFrame) totalFrames++;
+        document.getElementById('pktCount').textContent = totalPkts;
+        document.getElementById('frameCount').textContent = totalFrames;
+      };
+      ws.onclose = () => {
+        document.getElementById('statusDot').className = 'dot dot-off';
+        document.getElementById('statusText').textContent = 'Reconnecting';
+        setTimeout(connectTiming, 2000);
+      };
+      ws.onerror = () => ws.close();
+    }
+    connectTiming();
+
+    // ── Fetch profile periodically ──
+    async function fetchProfile() {
+      try {
+        const [pRes, tRes] = await Promise.all([
+          fetch('/api/lidar/profile/lidar-a'),
+          fetch('/api/lidar/auto-tas/lidar-a?cycle=500')
+        ]);
+        profile = await pRes.json();
+        autoTas = await tRes.json();
+        updateStats();
+        renderAutoConfig();
+      } catch {}
+    }
+    fetchProfile();
+    setInterval(fetchProfile, 2000);
+
+    function updateStats() {
+      if (!profile || profile.error) return;
+      document.getElementById('sFps').textContent = profile.fps;
+      document.getElementById('sPeriod').textContent = (profile.frameIntervalUs / 1000).toFixed(1) + 'ms';
+      const jEl = document.getElementById('sJitter');
+      jEl.textContent = (profile.jitterUs / 1000).toFixed(2) + 'ms';
+      jEl.style.color = profile.jitterUs < 500 ? 'var(--green)' : profile.jitterUs < 2000 ? 'var(--yellow)' : 'var(--red)';
+      document.getElementById('sPkts').textContent = profile.pktsPerFrame;
+      document.getElementById('sBw').textContent = profile.bandwidthMbps + ' Mbps';
+      document.getElementById('sPktInt').textContent = (profile.pktIntervalUs / 1000).toFixed(1) + 'ms';
+    }
+
+    // ── Auto TAS config render ──
+    function renderAutoConfig() {
+      const el = document.getElementById('autoConfig');
+      if (!autoTas || autoTas.error) {
+        el.innerHTML = `<span style="color:var(--text3)">${autoTas?.error || 'Waiting...'}</span>`;
+        return;
+      }
+      let html = `<div style="margin-bottom:8px;font-weight:700;">Cycle: ${autoTas.cycleUs} µs — LiDAR utilization: ${autoTas.utilization}%</div>`;
+      const totalUs = autoTas.entries.reduce((s, e) => s + e.durationUs, 0);
+      for (const e of autoTas.entries) {
+        const w = (e.durationUs / totalUs * 100);
+        const color = e.gateStates === 128 ? TC_COLORS[7] : e.gateStates === 127 ? '#444' : 'var(--orange)';
+        html += `<div class="auto-entry">
+          <div class="auto-bar" style="width:${Math.max(w, 2)}%;background:${color};"></div>
+          <span>${e.note}</span>
+          <span style="color:var(--text3);margin-left:auto;">${e.durationUs} µs</span>
+        </div>`;
+      }
+      if (autoTas.profile) {
+        html += `<div style="margin-top:8px;font-size:0.65rem;color:var(--text3);">Wire time: ${autoTas.lidarWireUs} µs/cycle | Margin: ${autoTas.margin} | Measured: ${autoTas.profile.bandwidthMbps} Mbps</div>`;
+      }
+      el.innerHTML = html;
+      document.getElementById('btnPush').disabled = false;
+    }
+
+    // ── Push button ──
+    document.getElementById('btnPush').addEventListener('click', async () => {
+      if (!autoTas?.entries) return;
+      const btn = document.getElementById('btnPush');
+      btn.disabled = true; btn.textContent = 'Pushing...';
+      try {
+        // Push to port 1 and port 2
+        for (const port of ['1', '2']) {
+          await fetch('/api/gcl/push-port', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              port, cycleUs: autoTas.cycleUs,
+              entries: autoTas.entries.map(e => ({ gateStates: e.gateStates, durationUs: e.durationUs })),
+              transport: 'eth', host: '192.168.1.10'
+            })
+          });
+        }
+        btn.textContent = 'Pushed!';
+        setTimeout(() => { btn.textContent = 'Push to Board (SW_REAR)'; btn.disabled = false; }, 2000);
+      } catch (e) {
+        btn.textContent = 'Failed: ' + e.message;
+        setTimeout(() => { btn.textContent = 'Push to Board (SW_REAR)'; btn.disabled = false; }, 3000);
+      }
+    });
+
+    // ── Canvas rendering ──
+    function setupCanvas(id) {
+      const c = document.getElementById(id);
+      const dpr = Math.min(devicePixelRatio, 2);
+      c.width = c.clientWidth * dpr;
+      c.height = c.clientHeight * dpr;
+      const ctx = c.getContext('2d');
+      ctx.scale(dpr, dpr);
+      return { c, ctx, w: c.clientWidth, h: c.clientHeight };
+    }
+
+    // ── Draw: Oscilloscope (packet arrivals) ──
+    function drawScope() {
+      const { ctx, w, h } = setupCanvas('scopeCanvas');
+      ctx.clearRect(0, 0, w, h);
+
+      if (packets.length < 2) return;
+
+      // Show last 500ms
+      const windowUs = 500000;
+      const now = packets[packets.length - 1].t;
+      const start = now - windowUs;
+
+      // Background frame boundaries
+      ctx.fillStyle = 'rgba(99,102,241,.04)';
+      let inFrame = false;
+      for (let i = 0; i < packets.length; i++) {
+        const p = packets[i];
+        if (p.t < start) continue;
+        if (p.newFrame) inFrame = !inFrame;
+        if (inFrame) {
+          const x = (p.t - start) / windowUs * w;
+          ctx.fillRect(x, 0, 2, h);
+        }
+      }
+
+      // Draw packet ticks
+      for (let i = 0; i < packets.length; i++) {
+        const p = packets[i];
+        if (p.t < start) continue;
+        const x = (p.t - start) / windowUs * w;
+        const intensity = Math.min(1, p.pts / 16);
+
+        if (p.newFrame) {
+          // Frame boundary: bright cyan line
+          ctx.strokeStyle = 'rgba(6,182,212,.7)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+        }
+
+        // Packet tick
+        ctx.fillStyle = `rgba(99,102,241,${0.3 + intensity * 0.6})`;
+        const barH = 10 + intensity * (h - 30);
+        ctx.fillRect(x, h - 15 - barH, 1.5, barH);
+      }
+
+      // Time axis labels
+      ctx.fillStyle = 'rgba(255,255,255,.25)';
+      ctx.font = '9px Inter';
+      for (let t = 0; t <= 5; t++) {
+        const x = (t / 5) * w;
+        ctx.fillText(`${t * 100}ms`, t === 5 ? x - 30 : x + 2, h - 2);
+      }
+
+      // Frame period markers
+      if (profile) {
+        ctx.fillStyle = 'rgba(255,255,255,.15)';
+        ctx.font = '9px Inter';
+        const periodMs = profile.frameIntervalUs / 1000;
+        ctx.fillText(`Period: ${periodMs.toFixed(1)}ms | ${profile.pktsPerFrame} pkts/frame`, 4, 12);
+      }
+    }
+
+    // ── Draw: Single frame detail ──
+    function drawFrameDetail() {
+      const { ctx, w, h } = setupCanvas('frameCanvas');
+      ctx.clearRect(0, 0, w, h);
+
+      // Find last complete frame
+      let frameStart = -1, frameEnd = -1;
+      for (let i = packets.length - 1; i >= 0; i--) {
+        if (packets[i].newFrame) {
+          if (frameEnd === -1) { frameEnd = i; }
+          else { frameStart = i; break; }
+        }
+      }
+      if (frameStart < 0 || frameEnd < 0) return;
+
+      const framePkts = packets.slice(frameStart, frameEnd);
+      if (framePkts.length < 2) return;
+
+      const t0 = framePkts[0].t;
+      const tEnd = framePkts[framePkts.length - 1].t;
+      const dur = tEnd - t0;
+      if (dur <= 0) return;
+
+      // Draw each packet as a bar
+      const barW = Math.max(2, (w - 40) / framePkts.length - 1);
+      for (let i = 0; i < framePkts.length; i++) {
+        const p = framePkts[i];
+        const x = 20 + i * (barW + 1);
+        const intensity = Math.min(1, p.pts / 16);
+        const barH = 15 + intensity * (h - 40);
+
+        ctx.fillStyle = `hsl(${240 + i * 3}, 70%, ${50 + intensity * 20}%)`;
+        ctx.fillRect(x, h - 15 - barH, barW, barH);
+
+        // Packet number
+        if (barW > 8) {
+          ctx.fillStyle = 'rgba(255,255,255,.4)';
+          ctx.font = '7px Inter';
+          ctx.fillText(i, x + 1, h - 4);
+        }
+      }
+
+      // Info
+      ctx.fillStyle = 'rgba(255,255,255,.2)';
+      ctx.font = '9px Inter';
+      ctx.fillText(`Frame: ${framePkts.length} pkts | Duration: ${(dur/1000).toFixed(1)}ms | Interval: ${(dur/framePkts.length/1000).toFixed(2)}ms`, 4, 12);
+      ctx.fillText(`Points/pkt: ${framePkts.map(p=>p.pts).join(',')}`, 4, 24);
+    }
+
+    // ── Draw: TAS overlay ──
+    function drawTasOverlay() {
+      const { ctx, w, h } = setupCanvas('tasCanvas');
+      ctx.clearRect(0, 0, w, h);
+
+      if (!autoTas?.entries || !profile) return;
+
+      const cycleUs = autoTas.cycleUs;
+      const margin = 30;
+      const barW = w - margin * 2;
+      const barY = 10;
+      const barH = 28;
+
+      // TAS schedule
+      let x = margin;
+      for (const e of autoTas.entries) {
+        const eW = (e.durationUs / cycleUs) * barW;
+        const color = e.gateStates === 128 ? 'rgba(0,122,255,.5)' :
+                      e.gateStates === 127 ? 'rgba(255,255,255,.05)' :
+                      'rgba(255,149,0,.3)';
+        ctx.fillStyle = color;
+        ctx.fillRect(x, barY, Math.max(eW, 1), barH);
+
+        // Label
+        if (eW > 30) {
+          ctx.fillStyle = 'rgba(255,255,255,.5)';
+          ctx.font = '9px Inter';
+          ctx.fillText(e.note, x + 4, barY + barH / 2 + 3);
+        }
+        x += eW;
+      }
+
+      // TAS border
+      ctx.strokeStyle = 'rgba(255,255,255,.1)';
+      ctx.strokeRect(margin, barY, barW, barH);
+
+      // LiDAR traffic overlay — where packets fall within cycle
+      const lidarY = barY + barH + 8;
+      const lidarH = 20;
+
+      ctx.fillStyle = 'rgba(255,255,255,.06)';
+      ctx.fillRect(margin, lidarY, barW, lidarH);
+
+      // Distribute packets evenly across the cycle (continuous streaming)
+      if (profile.pktsPerFrame > 0) {
+        const pktsPerCycle = profile.pktsPerFrame * (cycleUs / profile.frameIntervalUs);
+        const pktTxUs = (profile.pktSize + 38) * 8 / 1000; // µs on 1Gbps
+        for (let i = 0; i < Math.ceil(pktsPerCycle); i++) {
+          const pktX = margin + (i * profile.pktIntervalUs * cycleUs / profile.frameIntervalUs / cycleUs) * barW;
+          const pktW = Math.max((pktTxUs / cycleUs) * barW, 2);
+          ctx.fillStyle = 'rgba(99,102,241,.7)';
+          ctx.fillRect(pktX, lidarY + 2, pktW, lidarH - 4);
+        }
+      }
+
+      // Labels
+      ctx.fillStyle = 'rgba(255,255,255,.2)';
+      ctx.font = '9px Inter';
+      ctx.fillText('TAS Gates', 2, barY + barH / 2 + 3);
+      ctx.fillText('LiDAR pkts', 2, lidarY + lidarH / 2 + 3);
+
+      // Time axis
+      ctx.fillStyle = 'rgba(255,255,255,.15)';
+      for (let i = 0; i <= 5; i++) {
+        const tx = margin + (i / 5) * barW;
+        ctx.fillText(`${(cycleUs * i / 5).toFixed(0)}µs`, tx, h - 2);
+      }
+    }
+
+    // ── Animation loop ──
+    function render() {
+      requestAnimationFrame(render);
+      drawScope();
+      drawFrameDetail();
+      drawTasOverlay();
+    }
+    render();
+
+    // Resize handler
+    window.addEventListener('resize', () => {
+      // Canvases auto-resize in draw functions
+    });
+  </script>
+</body>
+</html>

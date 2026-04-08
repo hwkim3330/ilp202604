@@ -76,6 +76,8 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
   let lastStatTime = Date.now();
 
   // Track WS clients for this instance
+  let timingClients = new Set();
+
   wss.on('connection', (ws, req) => {
     if (wsPaths.includes(req.url)) {
       clients.add(ws);
@@ -88,6 +90,12 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
         originMm: ORIGIN_MM
       }));
       ws.on('close', () => clients.delete(ws));
+    }
+    // Timing WS: streams packet arrival timestamps
+    const timingPath = wsPaths[0].replace('/ws/lidar', '/ws/lidar-timing');
+    if (req.url === timingPath) {
+      timingClients.add(ws);
+      ws.on('close', () => timingClients.delete(ws));
     }
   });
 
@@ -249,12 +257,28 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
     if (cols.length === 0) return;
 
     const fid = cols[0].frameId;
-    if (fid !== currentFrameId && currentFrameId !== -1) {
+    const isNewFrame = fid !== currentFrameId && currentFrameId !== -1;
+
+    if (isNewFrame) {
       recordFrameProfile();
       broadcastFrame(framePoints);
       framePoints = [];
     }
     currentFrameId = fid;
+
+    // Stream timing data to timing clients
+    if (timingClients.size > 0) {
+      const timingMsg = JSON.stringify({
+        t: Math.round(nowUs),
+        fid,
+        sz: msg.length,
+        pts: cols.reduce((s, c) => s + c.pixels.filter(p => p).length, 0),
+        newFrame: isNewFrame,
+      });
+      for (const ws of timingClients) {
+        if (ws.readyState === 1) ws.send(timingMsg);
+      }
+    }
 
     for (const col of cols) {
       for (const px of col.pixels) {
