@@ -3,211 +3,162 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KETI TSN — Timing</title>
+  <title>KETI TSN — LiDAR Timing</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #000; --bg2: #0a0a0f; --bg3: #111116;
-      --card: rgba(255,255,255,.04); --card-hover: rgba(255,255,255,.06);
-      --border: rgba(255,255,255,.06); --border-hi: rgba(255,255,255,.12);
-      --text: #f5f5f7; --text2: rgba(255,255,255,.5); --text3: rgba(255,255,255,.25);
-      --blue: #0a84ff; --green: #30d158; --orange: #ff9f0a; --red: #ff453a;
-      --yellow: #ffd60a; --cyan: #64d2ff; --indigo: #5e5ce6; --purple: #bf5af2;
-      --glass: rgba(28,28,30,.72);
+      --bg: #ffffff; --bg2: #f5f5f7; --bg3: #fafafa;
+      --card: #ffffff;
+      --border: rgba(0,0,0,.06); --border-hi: rgba(0,0,0,.12);
+      --text: #1d1d1f; --text2: #6e6e73; --text3: #aeaeb2;
+      --blue: #007aff; --green: #34c759; --orange: #ff9500; --red: #ff3b30;
+      --yellow: #ffcc00; --cyan: #32ade6; --indigo: #5856d6; --purple: #af52de;
+      --shadow: 0 1px 3px rgba(0,0,0,.04), 0 0.5px 1px rgba(0,0,0,.03);
+      --shadow-lg: 0 4px 20px rgba(0,0,0,.06);
     }
     html, body { height: 100%; overflow: hidden; }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-      background: var(--bg); color: var(--text);
-      -webkit-font-smoothing: antialiased;
+      background: var(--bg2); color: var(--text); -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Layout ── */
-    .app {
-      display: grid;
-      grid-template-rows: auto auto 1fr auto auto;
-      height: 100vh;
-    }
+    .app { display: grid; grid-template-rows: auto auto 1fr auto; height: 100vh; }
 
     /* ── Nav ── */
     .nav {
       display: flex; align-items: center; gap: 0;
-      padding: 0 20px; height: 44px;
-      background: var(--bg2);
-      border-bottom: 1px solid var(--border);
+      padding: 0 20px; height: 48px;
+      background: var(--bg); border-bottom: 1px solid var(--border);
     }
-    .nav-brand {
-      font-size: 0.82rem; font-weight: 700; color: var(--text2);
-      margin-right: 20px; letter-spacing: -0.01em;
-    }
+    .nav-brand { font-size: 0.82rem; font-weight: 700; color: var(--text3); margin-right: 24px; }
     .nav-brand strong { color: var(--text); }
     .nav-links { display: flex; gap: 2px; }
     .nav-link {
-      padding: 8px 14px; border-radius: 8px;
+      padding: 6px 14px; border-radius: 8px;
       font-size: 0.72rem; font-weight: 500; color: var(--text3);
       text-decoration: none; transition: all .15s;
     }
-    .nav-link:hover { color: var(--text2); background: var(--card); }
-    .nav-link.active { color: var(--text); background: var(--card-hover); }
+    .nav-link:hover { color: var(--text2); background: var(--bg2); }
+    .nav-link.active { color: var(--blue); background: rgba(0,122,255,.06); font-weight: 600; }
     .nav-spacer { flex: 1; }
-    .nav-status {
+    .nav-chip {
       display: flex; align-items: center; gap: 6px;
       font-size: 0.68rem; font-weight: 500; color: var(--text3);
     }
-    .status-dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--text3); transition: background .3s;
-    }
-    .status-dot.live { background: var(--green); box-shadow: 0 0 8px rgba(48,209,88,.5); }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); }
+    .live-dot.on { background: var(--green); box-shadow: 0 0 6px rgba(52,199,89,.5); }
 
-    /* ── LiDAR Tabs ── */
-    .lidar-tabs {
-      display: flex; align-items: center; gap: 0;
-      padding: 0 20px; height: 40px;
-      background: var(--bg2);
-      border-bottom: 1px solid var(--border);
+    /* ── LiDAR Tabs + Spec ── */
+    .tab-bar {
+      display: flex; align-items: center;
+      padding: 0 20px; height: 44px;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      gap: 4px;
     }
-    .lidar-tab {
-      padding: 7px 18px; border-radius: 8px;
+    .tab {
+      padding: 6px 16px; border-radius: 8px; border: none; background: none;
       font-size: 0.72rem; font-weight: 600; color: var(--text3);
-      cursor: pointer; transition: all .15s; border: none; background: none;
-      font-family: inherit; position: relative;
+      cursor: pointer; font-family: inherit; transition: all .15s;
     }
-    .lidar-tab:hover { color: var(--text2); }
-    .lidar-tab.active {
-      color: var(--text); background: var(--card-hover);
-    }
-    .lidar-tab .tab-dot {
-      display: inline-block; width: 5px; height: 5px; border-radius: 50%;
-      margin-right: 5px; vertical-align: middle;
-    }
-    .tab-label { font-size: 0.6rem; color: var(--text3); margin-left: 16px; font-weight: 500; }
+    .tab:hover { color: var(--text2); background: var(--bg2); }
+    .tab.active { color: var(--blue); background: rgba(0,122,255,.06); }
+    .tab .tdot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; }
+    .tab-sep { width: 1px; height: 20px; background: var(--border); margin: 0 8px; }
+    .tab-spec { font-size: 0.62rem; color: var(--text3); font-weight: 500; }
+    .tab-spec strong { color: var(--text2); }
 
-    /* ── Stats Strip ── */
-    .stats {
-      display: flex; gap: 0;
-      border-bottom: 1px solid var(--border);
-      background: var(--bg2);
-    }
-    .stat {
-      flex: 1; padding: 14px 0; text-align: center;
-      border-right: 1px solid var(--border);
-      transition: background .2s;
-    }
-    .stat:last-child { border-right: none; }
-    .stat:hover { background: var(--card); }
-    .stat-val {
-      font-size: 1.5rem; font-weight: 800; letter-spacing: -0.03em;
-      font-variant-numeric: tabular-nums;
-    }
-    .stat-unit { font-size: 0.7rem; font-weight: 400; color: var(--text3); margin-left: 1px; }
-    .stat-label {
-      font-size: 0.55rem; font-weight: 600; color: var(--text3);
-      text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px;
-    }
+    /* ── Content ── */
+    .content { display: flex; flex-direction: column; overflow: hidden; gap: 1px; background: var(--border); }
 
-    /* ── Main Canvas Area ── */
-    .main {
-      display: grid;
+    /* ── Spec + Stats row ── */
+    .spec-row {
+      display: flex; background: var(--bg); padding: 16px 20px; gap: 0;
+    }
+    .spec-group {
+      flex: 1; display: flex; flex-direction: column; gap: 6px;
+      padding: 0 16px; border-right: 1px solid var(--border);
+    }
+    .spec-group:first-child { padding-left: 0; }
+    .spec-group:last-child { border-right: none; padding-right: 0; }
+    .spec-title {
+      font-size: 0.55rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text3);
+    }
+    .spec-items { display: flex; gap: 20px; flex-wrap: wrap; }
+    .spec-item {}
+    .spec-val {
+      font-size: 1.3rem; font-weight: 800; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .spec-val .unit { font-size: 0.65rem; font-weight: 500; color: var(--text3); margin-left: 1px; }
+    .spec-label { font-size: 0.55rem; color: var(--text3); margin-top: 2px; }
+    .spec-sub { font-size: 0.55rem; color: var(--text3); font-style: italic; }
+
+    /* ── Canvases ── */
+    .canvas-grid {
+      flex: 1; display: grid;
       grid-template-columns: 1fr 1fr;
       grid-template-rows: 1fr 1fr;
-      gap: 1px;
-      background: var(--border);
+      gap: 1px; background: var(--border);
     }
-    .canvas-cell {
-      background: var(--bg);
-      position: relative; overflow: hidden;
-    }
-    .canvas-cell canvas {
-      width: 100%; height: 100%; display: block;
-    }
+    .canvas-cell { background: var(--bg); position: relative; overflow: hidden; }
+    .canvas-cell canvas { width: 100%; height: 100%; display: block; }
     .cell-label {
-      position: absolute; top: 10px; left: 14px;
-      font-size: 0.6rem; font-weight: 700; color: var(--text3);
-      text-transform: uppercase; letter-spacing: 0.08em;
-      pointer-events: none;
+      position: absolute; top: 8px; left: 12px;
+      font-size: 0.58rem; font-weight: 700; color: var(--text3);
+      text-transform: uppercase; letter-spacing: 0.06em;
     }
 
-    /* ── TAS Config Bar ── */
+    /* ── TAS Bar ── */
     .tas-bar {
-      display: flex; align-items: stretch; gap: 0;
-      border-top: 1px solid var(--border);
-      background: var(--bg2);
-      min-height: 64px;
+      display: flex; align-items: stretch;
+      background: var(--bg); border-top: 1px solid var(--border);
+      min-height: 56px;
     }
-    .tas-visual {
-      flex: 3; padding: 10px 20px;
-      display: flex; flex-direction: column; justify-content: center;
-    }
+    .tas-visual { flex: 3; padding: 10px 20px; display: flex; flex-direction: column; justify-content: center; }
     .tas-timeline {
-      height: 24px; border-radius: 6px; overflow: hidden;
-      display: flex; position: relative;
-      background: rgba(255,255,255,.02);
-      border: 1px solid var(--border);
+      height: 20px; border-radius: 6px; overflow: hidden; display: flex;
+      background: var(--bg2); border: 1px solid var(--border);
     }
     .tas-seg {
-      height: 100%; position: relative;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.55rem; font-weight: 700; color: rgba(255,255,255,.5);
-      overflow: hidden; white-space: nowrap; transition: flex .3s;
+      height: 100%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.52rem; font-weight: 700; color: var(--text3);
+      overflow: hidden; white-space: nowrap;
     }
-    .tas-meta {
-      display: flex; gap: 16px; margin-top: 6px;
-      font-size: 0.6rem; color: var(--text3);
-    }
-    .tas-meta strong { color: var(--text2); font-weight: 600; }
+    .tas-meta { display: flex; gap: 14px; margin-top: 5px; font-size: 0.58rem; color: var(--text3); }
+    .tas-meta strong { color: var(--text2); }
 
-    .tas-info {
-      flex: 2; padding: 10px 20px;
-      display: flex; flex-direction: column; justify-content: center;
-      border-left: 1px solid var(--border);
-      font-size: 0.68rem;
+    .tas-detail {
+      flex: 2; padding: 8px 20px; border-left: 1px solid var(--border);
+      display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px;
+      font-size: 0.62rem; align-content: center;
     }
-    .tas-info-row {
-      display: flex; justify-content: space-between; padding: 2px 0;
-    }
-    .tas-info-label { color: var(--text3); }
-    .tas-info-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .td-row { display: flex; justify-content: space-between; }
+    .td-label { color: var(--text3); }
+    .td-val { font-weight: 600; font-variant-numeric: tabular-nums; }
 
     .tas-actions {
       display: flex; align-items: center; gap: 8px;
-      padding: 10px 20px;
-      border-left: 1px solid var(--border);
+      padding: 8px 20px; border-left: 1px solid var(--border);
     }
     .btn {
-      padding: 8px 20px; border-radius: 8px; border: none;
-      font-size: 0.75rem; font-weight: 600; cursor: pointer;
+      padding: 7px 18px; border-radius: 8px; border: none;
+      font-size: 0.72rem; font-weight: 600; cursor: pointer;
       font-family: inherit; transition: all .15s;
     }
     .btn-primary { background: var(--blue); color: #fff; }
-    .btn-primary:hover { filter: brightness(1.15); }
+    .btn-primary:hover { filter: brightness(1.1); }
     .btn-primary:disabled { opacity: .3; cursor: not-allowed; filter: none; }
-    .btn-ghost {
-      background: none; border: 1px solid var(--border); color: var(--text2);
-      padding: 8px 14px;
+    .sel {
+      padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+      font-size: 0.68rem; font-family: inherit; background: var(--bg2);
+      color: var(--text2); cursor: pointer;
     }
-    .btn-ghost:hover { border-color: var(--text3); color: var(--text); }
-
-    /* ── Bottom Nav ── */
-    .bottom-nav {
-      display: flex; align-items: center; gap: 0;
-      padding: 0 20px; height: 32px;
-      background: var(--bg2);
-      border-top: 1px solid var(--border);
-      font-size: 0.6rem; color: var(--text3);
-    }
-    .bottom-nav a {
-      color: var(--text3); text-decoration: none; padding: 4px 10px;
-      border-radius: 4px; transition: color .15s;
-    }
-    .bottom-nav a:hover { color: var(--text2); }
-    .bottom-nav .sep { width: 1px; height: 12px; background: var(--border); margin: 0 4px; }
   </style>
 </head>
 <body>
   <div class="app">
-    <!-- Nav -->
     <nav class="nav">
       <span class="nav-brand"><strong>KETI</strong> TSN</span>
       <div class="nav-links">
@@ -218,506 +169,357 @@
         <a class="nav-link" href="lidar.html">Cloud</a>
       </div>
       <span class="nav-spacer"></span>
-      <div class="nav-status">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Connecting</span>
-      </div>
+      <div class="nav-chip"><span class="live-dot" id="statusDot"></span><span id="statusText">Connecting</span></div>
     </nav>
 
-    <!-- LiDAR selector tabs -->
-    <div class="lidar-tabs" id="lidarTabs">
-      <!-- Populated by JS from /api/config -->
+    <div class="tab-bar" id="tabBar">
+      <!-- LiDAR tabs + spec populated by JS -->
     </div>
 
-    <!-- Stats -->
-    <div style="display:flex;flex-direction:column;overflow:hidden;">
-      <div class="stats" id="statsRow">
-        <div class="stat"><div class="stat-val" id="sFps">—</div><div class="stat-label">FPS</div></div>
-        <div class="stat"><div class="stat-val" id="sPeriod">—</div><div class="stat-label">Frame Period</div></div>
-        <div class="stat"><div class="stat-val" id="sJitter" style="color:var(--green)">—</div><div class="stat-label">Jitter</div></div>
-        <div class="stat"><div class="stat-val" id="sPkts">—</div><div class="stat-label">Pkts / Frame</div></div>
-        <div class="stat"><div class="stat-val" id="sBw">—</div><div class="stat-label">Bandwidth</div></div>
-        <div class="stat"><div class="stat-val" id="sPktInt">—</div><div class="stat-label">Pkt Interval</div></div>
-        <div class="stat"><div class="stat-val" id="sWire">—</div><div class="stat-label">Wire Time</div></div>
-        <div class="stat"><div class="stat-val" id="sCycle" style="color:var(--cyan)">—</div><div class="stat-label">TAS Cycle</div></div>
+    <div class="content">
+      <!-- Spec + Measured values -->
+      <div class="spec-row">
+        <div class="spec-group">
+          <div class="spec-title">Sensor Spec</div>
+          <div class="spec-items">
+            <div class="spec-item">
+              <div class="spec-val" id="xBeams">16<span class="unit">beams</span></div>
+              <div class="spec-label">Vertical channels</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-val" id="xCols">512<span class="unit">cols</span></div>
+              <div class="spec-label">Azimuth samples</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-val" id="xMode">1024×10</div>
+              <div class="spec-label">Mode (cols × Hz)</div>
+            </div>
+          </div>
+        </div>
+        <div class="spec-group">
+          <div class="spec-title">Packet Structure</div>
+          <div class="spec-items">
+            <div class="spec-item">
+              <div class="spec-val" id="xPktSize">3392<span class="unit">B</span></div>
+              <div class="spec-label">UDP payload</div>
+              <div class="spec-sub">16 cols × 212 B/col</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-val" id="xPpf">32<span class="unit">pkts</span></div>
+              <div class="spec-label">Per frame</div>
+              <div class="spec-sub">512 ÷ 16 cols/pkt</div>
+            </div>
+          </div>
+        </div>
+        <div class="spec-group">
+          <div class="spec-title">Measured Timing</div>
+          <div class="spec-items">
+            <div class="spec-item">
+              <div class="spec-val" id="xFps">—<span class="unit">Hz</span></div>
+              <div class="spec-label">Frame rate</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-val" id="xPeriod">—<span class="unit">ms</span></div>
+              <div class="spec-label">Frame period</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-val" id="xPktInt">—<span class="unit">ms</span></div>
+              <div class="spec-label">Packet interval</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-val" id="xJitter" style="color:var(--green)">—<span class="unit">µs</span></div>
+              <div class="spec-label">Jitter (σ)</div>
+            </div>
+          </div>
+        </div>
+        <div class="spec-group">
+          <div class="spec-title">TAS Derivation</div>
+          <div class="spec-items">
+            <div class="spec-item">
+              <div class="spec-val" id="xWire">—<span class="unit">µs</span></div>
+              <div class="spec-label">Wire time / pkt</div>
+              <div class="spec-sub">(payload + 38) × 8 ÷ 1 Gbps</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-val" id="xCycle" style="color:var(--blue)">—<span class="unit">µs</span></div>
+              <div class="spec-label">Cycle = pkt interval</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-val" id="xBw">—<span class="unit">Mbps</span></div>
+              <div class="spec-label">Bandwidth</div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- 4 canvases: scope, frame, TAS overlay, jitter histogram -->
-      <div class="main">
+      <!-- 4 canvases -->
+      <div class="canvas-grid">
         <div class="canvas-cell">
-          <div class="cell-label">Packet Arrivals — 500 ms window</div>
+          <div class="cell-label">Packet Arrivals — 500 ms</div>
           <canvas id="cScope"></canvas>
         </div>
         <div class="canvas-cell">
-          <div class="cell-label">Single Frame — 32 packets</div>
+          <div class="cell-label">Frame Detail — 32 packets</div>
           <canvas id="cFrame"></canvas>
         </div>
         <div class="canvas-cell">
-          <div class="cell-label">TAS Alignment — 1 cycle</div>
+          <div class="cell-label">TAS Gate vs Packet — 1 cycle</div>
           <canvas id="cTas"></canvas>
         </div>
         <div class="canvas-cell">
-          <div class="cell-label">Inter-Packet Jitter</div>
+          <div class="cell-label">Packet Interval Distribution</div>
           <canvas id="cJitter"></canvas>
         </div>
       </div>
     </div>
 
-    <!-- TAS Config Bar -->
+    <!-- TAS bar -->
     <div class="tas-bar">
       <div class="tas-visual">
         <div class="tas-timeline" id="tasTimeline"></div>
         <div class="tas-meta" id="tasMeta"></div>
       </div>
-      <div class="tas-info" id="tasInfo"></div>
+      <div class="tas-detail" id="tasDetail"></div>
       <div class="tas-actions">
-        <select id="boardSelect" class="btn btn-ghost" style="font-size:0.7rem;">
-          <option value="">Board...</option>
-        </select>
+        <select class="sel" id="boardSel"><option value="">Board</option></select>
         <button class="btn btn-primary" id="btnPush" disabled>Push TAS</button>
       </div>
-    </div>
-
-    <!-- Bottom -->
-    <div class="bottom-nav">
-      <span>Packet-derived TAS — cycle from measured inter-packet interval</span>
-      <span class="nav-spacer"></span>
-      <a href="solver.html">Solver</a><span class="sep"></span>
-      <a href="index.html">Home</a>
     </div>
   </div>
 
   <script>
-  // ═══════════════════════════════════════════
-  // CONFIG + STATE
-  // ═══════════════════════════════════════════
-  let config = { boards: [], lidars: [] };
-  let selectedLidar = null;
-  let ws = null;
-
-  const packets = [];
-  const MAX_PKTS = 2000;
-  let totalPkts = 0, totalFrames = 0;
+  let config = { boards: [], lidars: [] }, selectedLidar = null, ws = null;
+  const packets = [], MAX_PKTS = 2000;
   let profile = null, autoTas = null;
 
-  const TC_COLORS = ['#636366','#ff453a','#30d158','#ff9f0a','#bf5af2','#5e5ce6','#64d2ff','#0a84ff'];
-
-  // ═══════════════════════════════════════════
-  // INIT — load config, build tabs
-  // ═══════════════════════════════════════════
+  // ── Init ──
   async function init() {
-    try {
-      const res = await fetch('/api/config');
-      config = await res.json();
-    } catch {}
-
-    // LiDAR tabs
-    const tabsEl = document.getElementById('lidarTabs');
-    tabsEl.innerHTML = '';
-    if (config.lidars.length === 0) {
-      config.lidars = [{ id: 'lidar-a', label: 'LiDAR A', udpPort: 7502 }];
-    }
+    try { config = await (await fetch('/api/config')).json(); } catch {}
+    const bar = document.getElementById('tabBar');
+    bar.innerHTML = '';
+    if (!config.lidars.length) config.lidars = [{ id:'lidar-a', label:'Ouster A', udpPort:7502 }];
+    const colors = ['var(--blue)','var(--green)','var(--orange)'];
     config.lidars.forEach((l, i) => {
-      const btn = document.createElement('button');
-      btn.className = 'lidar-tab' + (i === 0 ? ' active' : '');
-      const dotColor = i === 0 ? 'var(--blue)' : i === 1 ? 'var(--green)' : 'var(--orange)';
-      btn.innerHTML = `<span class="tab-dot" style="background:${dotColor}"></span>${l.label || l.id}`;
-      btn.onclick = () => selectLidar(l, btn);
-      tabsEl.appendChild(btn);
+      const b = document.createElement('button');
+      b.className = 'tab' + (i===0?' active':'');
+      b.innerHTML = `<span class="tdot" style="background:${colors[i]}"></span>${l.label||l.id}`;
+      b.onclick = () => selectLidar(l, b);
+      bar.appendChild(b);
     });
-    const label = document.createElement('span');
-    label.className = 'tab-label';
-    label.id = 'tabInfo';
-    label.textContent = `UDP :${config.lidars[0].udpPort}`;
-    tabsEl.appendChild(label);
+    const sep = document.createElement('span'); sep.className = 'tab-sep'; bar.appendChild(sep);
+    const spec = document.createElement('span'); spec.className = 'tab-spec'; spec.id = 'tabSpec';
+    spec.innerHTML = `UDP <strong>:${config.lidars[0].udpPort}</strong> &nbsp; LEGACY format &nbsp; 16 beams × 512 cols`;
+    bar.appendChild(spec);
 
-    // Board selector
-    const boardSel = document.getElementById('boardSelect');
-    boardSel.innerHTML = '<option value="">Select board</option>';
-    config.boards.forEach(b => {
-      const opt = document.createElement('option');
-      opt.value = b.id;
-      opt.textContent = `${b.id} (${b.host})`;
-      boardSel.appendChild(opt);
-    });
+    const bs = document.getElementById('boardSel');
+    bs.innerHTML = '<option value="">Board</option>';
+    config.boards.forEach(b => { const o = document.createElement('option'); o.value = b.id; o.textContent = `${b.id}`; bs.appendChild(o); });
 
-    selectLidar(config.lidars[0], tabsEl.querySelector('.lidar-tab'));
+    selectLidar(config.lidars[0], bar.querySelector('.tab'));
   }
 
-  function selectLidar(lidar, tabBtn) {
-    selectedLidar = lidar;
-    packets.length = 0;
-    totalPkts = 0; totalFrames = 0;
-    profile = null; autoTas = null;
-
-    // Update tab UI
-    document.querySelectorAll('.lidar-tab').forEach(t => t.classList.remove('active'));
-    if (tabBtn) tabBtn.classList.add('active');
-    document.getElementById('tabInfo').textContent = `UDP :${lidar.udpPort}`;
-
-    // Reconnect WS
+  function selectLidar(l, btn) {
+    selectedLidar = l;
+    packets.length = 0; profile = null; autoTas = null;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    document.getElementById('tabSpec').innerHTML = `UDP <strong>:${l.udpPort}</strong> &nbsp; LEGACY format &nbsp; 16 beams × 512 cols`;
     if (ws) { ws.onclose = null; ws.close(); }
-    connectWS(lidar.id);
+    connectWS(l.id);
   }
 
-  // ═══════════════════════════════════════════
-  // WEBSOCKET
-  // ═══════════════════════════════════════════
-  function connectWS(lidarId) {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsPath = `/ws/lidar-timing-${lidarId.replace('lidar-', '')}`;
-    ws = new WebSocket(`${proto}//${location.host}${wsPath}`);
-
-    ws.onopen = () => {
-      document.getElementById('statusDot').className = 'status-dot live';
-      document.getElementById('statusText').textContent = 'Live';
-    };
+  // ── WS ──
+  function connectWS(id) {
+    const proto = location.protocol==='https:'?'wss:':'ws:';
+    ws = new WebSocket(`${proto}//${location.host}/ws/lidar-timing-${id.replace('lidar-','')}`);
+    ws.onopen = () => { document.getElementById('statusDot').className='live-dot on'; document.getElementById('statusText').textContent='Live'; };
     ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'pkt') {
-        packets.push(msg);
-        if (packets.length > MAX_PKTS) packets.shift();
-        totalPkts++;
-        if (msg.newFrame) totalFrames++;
-      } else if (msg.type === 'profile') {
-        profile = msg.profile;
-        autoTas = msg.autoTas;
-        updateUI();
-      }
+      const m = JSON.parse(e.data);
+      if (m.type==='pkt') { packets.push(m); if (packets.length > MAX_PKTS) packets.shift(); }
+      else if (m.type==='profile') { profile = m.profile; autoTas = m.autoTas; updateUI(); }
     };
-    ws.onclose = () => {
-      document.getElementById('statusDot').className = 'status-dot';
-      document.getElementById('statusText').textContent = 'Offline';
-      setTimeout(() => connectWS(lidarId), 2000);
-    };
+    ws.onclose = () => { document.getElementById('statusDot').className='live-dot'; document.getElementById('statusText').textContent='Offline'; setTimeout(()=>connectWS(id),2000); };
     ws.onerror = () => ws.close();
   }
 
-  // ═══════════════════════════════════════════
-  // UI UPDATE
-  // ═══════════════════════════════════════════
+  // ── UI ──
   function updateUI() {
     if (!profile) return;
     const p = profile;
-
-    document.getElementById('sFps').textContent = p.fps;
-    document.getElementById('sPeriod').innerHTML = `${(p.frameIntervalUs/1000).toFixed(1)}<span class="stat-unit">ms</span>`;
-    const jEl = document.getElementById('sJitter');
-    jEl.innerHTML = `${(p.jitterUs/1000).toFixed(2)}<span class="stat-unit">ms</span>`;
-    jEl.style.color = p.jitterUs < 500 ? 'var(--green)' : p.jitterUs < 2000 ? 'var(--yellow)' : 'var(--red)';
-    document.getElementById('sPkts').textContent = p.pktsPerFrame;
-    document.getElementById('sBw').innerHTML = `${p.bandwidthMbps}<span class="stat-unit">Mbps</span>`;
-    document.getElementById('sPktInt').innerHTML = `${(p.pktIntervalUs/1000).toFixed(1)}<span class="stat-unit">ms</span>`;
+    document.getElementById('xFps').innerHTML = `${p.fps}<span class="unit">Hz</span>`;
+    document.getElementById('xPeriod').innerHTML = `${(p.frameIntervalUs/1000).toFixed(1)}<span class="unit">ms</span>`;
+    document.getElementById('xPktInt').innerHTML = `${(p.pktIntervalUs/1000).toFixed(2)}<span class="unit">ms</span>`;
+    const jEl = document.getElementById('xJitter');
+    jEl.innerHTML = `${p.jitterUs}<span class="unit">µs</span>`;
+    jEl.style.color = p.jitterUs < 500 ? 'var(--green)' : p.jitterUs < 2000 ? 'var(--orange)' : 'var(--red)';
+    document.getElementById('xBw').innerHTML = `${p.bandwidthMbps}<span class="unit">Mbps</span>`;
+    document.getElementById('xPpf').innerHTML = `${p.pktsPerFrame}<span class="unit">pkts</span>`;
+    document.getElementById('xPktSize').innerHTML = `${p.pktSize}<span class="unit">B</span>`;
 
     if (autoTas && !autoTas.error) {
-      document.getElementById('sWire').innerHTML = `${autoTas.pktTxUs}<span class="stat-unit">µs</span>`;
-      document.getElementById('sCycle').innerHTML = `${autoTas.cycleUs}<span class="stat-unit">µs</span>`;
+      document.getElementById('xWire').innerHTML = `${autoTas.pktTxUs}<span class="unit">µs</span>`;
+      document.getElementById('xCycle').innerHTML = `${autoTas.cycleUs}<span class="unit">µs</span>`;
       renderTasBar();
-      document.getElementById('btnPush').disabled = !document.getElementById('boardSelect').value;
+      document.getElementById('btnPush').disabled = !document.getElementById('boardSel').value;
     }
   }
 
   function renderTasBar() {
     if (!autoTas?.entries) return;
-    const tl = document.getElementById('tasTimeline');
-    const total = autoTas.entries.reduce((s, e) => s + e.durationUs, 0);
-    tl.innerHTML = autoTas.entries.map(e => {
-      const pct = (e.durationUs / total * 100);
+    const total = autoTas.entries.reduce((s,e)=>s+e.durationUs,0);
+    document.getElementById('tasTimeline').innerHTML = autoTas.entries.map(e => {
+      const pct = e.durationUs/total*100;
       let bg = 'transparent';
-      if (e.gateStates === 128) bg = 'var(--blue)';
-      else if (e.gateStates === 127) bg = 'rgba(255,255,255,.03)';
-      else if (e.gateStates === 0) bg = 'rgba(255,149,0,.3)';
-      const label = pct > 5 ? (e.gateStates === 128 ? 'TC7' : e.gateStates === 127 ? 'BE' : '') : '';
+      if (e.gateStates===128) bg='rgba(0,122,255,.2)';
+      else if (e.gateStates===0) bg='rgba(255,149,0,.15)';
+      const label = pct>4 ? (e.gateStates===128?'TC7 LiDAR':e.gateStates===127?'Best Effort':'') : '';
       return `<div class="tas-seg" style="flex:${pct};background:${bg}">${label}</div>`;
     }).join('');
 
-    document.getElementById('tasMeta').innerHTML = `
-      Cycle <strong>${autoTas.cycleUs} µs</strong> &nbsp;
-      LiDAR <strong>${autoTas.entries[0].durationUs} µs</strong> (${autoTas.utilization}%) &nbsp;
-      Wire <strong>${autoTas.pktTxUs} µs</strong> × 2x margin &nbsp;
-      Pkt <strong>${profile.pktSize} B</strong>
-    `;
+    document.getElementById('tasMeta').innerHTML =
+      `Cycle <strong>${autoTas.cycleUs} µs</strong> = pkt interval &nbsp;
+       TC7 <strong>${autoTas.entries[0].durationUs} µs</strong> (${autoTas.utilization}%) &nbsp;
+       Wire <strong>${autoTas.pktTxUs} µs</strong> × 2 margin`;
 
-    const pa = autoTas.packetAnalysis || {};
-    document.getElementById('tasInfo').innerHTML = `
-      <div class="tas-info-row"><span class="tas-info-label">Derived cycle</span><span class="tas-info-val">${autoTas.naturalCycleUs} → ${autoTas.cycleUs} µs</span></div>
-      <div class="tas-info-row"><span class="tas-info-label">Pkt tx time</span><span class="tas-info-val">${autoTas.pktTxUs} µs</span></div>
-      <div class="tas-info-row"><span class="tas-info-label">Pkt jitter</span><span class="tas-info-val">± ${pa.pktJitterUs || 0} µs</span></div>
-      <div class="tas-info-row"><span class="tas-info-label">Frame</span><span class="tas-info-val">${pa.pktsPerFrame} pkts × ${pa.fps} fps</span></div>
-    `;
+    const pa = autoTas.packetAnalysis||{};
+    document.getElementById('tasDetail').innerHTML =
+      `<div class="td-row"><span class="td-label">Natural cycle</span><span class="td-val">${autoTas.naturalCycleUs} µs</span></div>
+       <div class="td-row"><span class="td-label">Rounded</span><span class="td-val">${autoTas.cycleUs} µs</span></div>
+       <div class="td-row"><span class="td-label">Pkt wire time</span><span class="td-val">${autoTas.pktTxUs} µs</span></div>
+       <div class="td-row"><span class="td-label">Pkt jitter</span><span class="td-val">± ${pa.pktJitterUs||0} µs</span></div>`;
   }
 
-  // ═══════════════════════════════════════════
-  // PUSH
-  // ═══════════════════════════════════════════
-  document.getElementById('boardSelect').addEventListener('change', () => {
-    document.getElementById('btnPush').disabled = !document.getElementById('boardSelect').value || !autoTas?.entries;
+  // ── Push ──
+  document.getElementById('boardSel').addEventListener('change', () => {
+    document.getElementById('btnPush').disabled = !document.getElementById('boardSel').value || !autoTas?.entries;
   });
-
   document.getElementById('btnPush').addEventListener('click', async () => {
-    const boardId = document.getElementById('boardSelect').value;
-    const board = config.boards.find(b => b.id === boardId);
-    if (!board || !autoTas?.entries) return;
+    const boardId = document.getElementById('boardSel').value;
+    if (!boardId || !autoTas?.entries) return;
     const btn = document.getElementById('btnPush');
-    btn.disabled = true; btn.textContent = 'Pushing...';
-    const entries = autoTas.entries.map(e => ({ gateStates: e.gateStates, durationUs: e.durationUs }));
+    btn.disabled=true; btn.textContent='Pushing...';
+    const entries = autoTas.entries.map(e=>({gateStates:e.gateStates,durationUs:e.durationUs}));
     try {
-      for (const port of ['1', '2']) {
-        const res = await fetch('/api/gcl/push-port', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ port, cycleUs: autoTas.cycleUs, entries, transport: 'serial' })
-        });
-        const data = await res.json();
-        if (!data.success) throw new Error(`Port ${port}: ${data.error}`);
+      for (const port of ['1','2']) {
+        const r = await fetch('/api/gcl/push-port',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({port,cycleUs:autoTas.cycleUs,entries,transport:'serial'})});
+        const d = await r.json(); if(!d.success) throw new Error(`P${port}: ${d.error}`);
       }
-      btn.textContent = 'Done';
-      btn.style.background = 'var(--green)';
-      setTimeout(() => { btn.textContent = 'Push TAS'; btn.style.background = ''; btn.disabled = false; }, 2000);
-    } catch (e) {
-      btn.textContent = 'Failed';
-      btn.style.background = 'var(--red)';
-      setTimeout(() => { btn.textContent = 'Push TAS'; btn.style.background = ''; btn.disabled = false; }, 3000);
+      btn.textContent='Done'; btn.style.background='var(--green)';
+      setTimeout(()=>{btn.textContent='Push TAS';btn.style.background='';btn.disabled=false;},2000);
+    } catch(e) {
+      btn.textContent='Failed'; btn.style.background='var(--red)';
+      setTimeout(()=>{btn.textContent='Push TAS';btn.style.background='';btn.disabled=false;},3000);
     }
   });
 
   // ═══════════════════════════════════════════
-  // CANVAS RENDERING
+  // CANVAS
   // ═══════════════════════════════════════════
-  function ctx(id) {
+  function getCtx(id) {
     const c = document.getElementById(id);
-    const dpr = Math.min(devicePixelRatio, 2);
-    const rect = c.getBoundingClientRect();
-    c.width = rect.width * dpr; c.height = rect.height * dpr;
-    const x = c.getContext('2d');
-    x.scale(dpr, dpr);
-    return { x, w: rect.width, h: rect.height };
+    const dpr = Math.min(devicePixelRatio,2);
+    const r = c.getBoundingClientRect();
+    c.width=r.width*dpr; c.height=r.height*dpr;
+    const x=c.getContext('2d'); x.scale(dpr,dpr);
+    return {x,w:r.width,h:r.height};
   }
 
-  // ── Scope ──
   function drawScope() {
-    const { x, w, h } = ctx('cScope');
-    x.clearRect(0, 0, w, h);
-    if (packets.length < 2) return;
-    const windowUs = 500000;
-    const now = packets[packets.length - 1].t;
-    const start = now - windowUs;
-    const top = 28;
-
-    // Frame alternating background
-    let frameToggle = false;
-    for (let i = 0; i < packets.length; i++) {
-      const p = packets[i]; if (p.t < start) continue;
-      if (p.newFrame) frameToggle = !frameToggle;
-      if (frameToggle) {
-        const px = (p.t - start) / windowUs * w;
-        x.fillStyle = 'rgba(10,132,255,.03)';
-        x.fillRect(px, top, 2, h - top - 14);
-      }
-    }
-
-    // Packets
-    for (const p of packets) {
-      if (p.t < start) continue;
-      const px = (p.t - start) / windowUs * w;
-      const intensity = Math.min(1, p.pts / 16);
-      if (p.newFrame) {
-        x.strokeStyle = 'rgba(100,210,255,.35)';
-        x.lineWidth = 0.5;
-        x.beginPath(); x.moveTo(px, top); x.lineTo(px, h - 14); x.stroke();
-      }
-      const barH = 6 + intensity * (h - top - 26);
-      x.fillStyle = `rgba(10,132,255,${0.2 + intensity * 0.6})`;
-      x.fillRect(px, h - 14 - barH, 1.5, barH);
-    }
-
-    // Time axis
-    x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '9px Inter';
-    for (let i = 0; i <= 5; i++) {
-      x.fillText(`${i * 100}ms`, (i / 5) * w + 2, h - 2);
-    }
+    const {x,w,h}=getCtx('cScope'); x.clearRect(0,0,w,h);
+    if(packets.length<2)return;
+    const winUs=500000, now=packets[packets.length-1].t, start=now-winUs;
+    const top=24, bot=14;
+    let toggle=false;
+    for(const p of packets){if(p.t<start)continue;if(p.newFrame)toggle=!toggle;
+      if(toggle){const px=(p.t-start)/winUs*w;x.fillStyle='rgba(0,122,255,.03)';x.fillRect(px,top,2,h-top-bot);}}
+    for(const p of packets){if(p.t<start)continue;const px=(p.t-start)/winUs*w;const int=Math.min(1,p.pts/16);
+      if(p.newFrame){x.strokeStyle='rgba(50,173,230,.25)';x.lineWidth=0.5;x.beginPath();x.moveTo(px,top);x.lineTo(px,h-bot);x.stroke();}
+      const bh=4+int*(h-top-bot-8);x.fillStyle=`rgba(0,122,255,${0.15+int*0.5})`;x.fillRect(px,h-bot-bh,1.5,bh);}
+    x.fillStyle='rgba(0,0,0,.2)';x.font='9px Inter';
+    for(let i=0;i<=5;i++)x.fillText(`${i*100}ms`,(i/5)*w+2,h-2);
   }
 
-  // ── Frame Detail ──
   function drawFrame() {
-    const { x, w, h } = ctx('cFrame');
-    x.clearRect(0, 0, w, h);
-    let fs = -1, fe = -1;
-    for (let i = packets.length - 1; i >= 0; i--) {
-      if (packets[i].newFrame) { if (fe < 0) fe = i; else { fs = i; break; } }
-    }
-    if (fs < 0) return;
-    const fp = packets.slice(fs, fe);
-    if (fp.length < 2) return;
-    const top = 28, bot = 14;
-    const gap = 2;
-    const barW = Math.max(2, (w - 30) / fp.length - gap);
-
-    for (let i = 0; i < fp.length; i++) {
-      const p = fp[i];
-      const intensity = Math.min(1, p.pts / 16);
-      const bh = 10 + intensity * (h - top - bot - 16);
-      const bx = 15 + i * (barW + gap);
-      // Gradient bar
-      const grad = x.createLinearGradient(0, h - bot - bh, 0, h - bot);
-      grad.addColorStop(0, `rgba(10,132,255,${0.4 + intensity * 0.5})`);
-      grad.addColorStop(1, `rgba(94,92,230,${0.2 + intensity * 0.3})`);
-      x.fillStyle = grad;
-      x.beginPath(); x.roundRect(bx, h - bot - bh, barW, bh, 2); x.fill();
-    }
-
-    // Info
-    const dur = (fp[fp.length-1].t - fp[0].t) / 1000;
-    x.fillStyle = 'rgba(255,255,255,.2)'; x.font = '9px Inter';
-    x.fillText(`${fp.length} pkts | ${dur.toFixed(1)}ms | avg ${(dur/fp.length).toFixed(2)}ms/pkt`, 15, h - 2);
+    const {x,w,h}=getCtx('cFrame'); x.clearRect(0,0,w,h);
+    let fs=-1,fe=-1;
+    for(let i=packets.length-1;i>=0;i--){if(packets[i].newFrame){if(fe<0)fe=i;else{fs=i;break;}}}
+    if(fs<0)return;
+    const fp=packets.slice(fs,fe); if(fp.length<2)return;
+    const top=24,bot=14,gap=2,barW=Math.max(2,(w-30)/fp.length-gap);
+    for(let i=0;i<fp.length;i++){
+      const p=fp[i],int=Math.min(1,p.pts/16),bh=8+int*(h-top-bot-12),bx=15+i*(barW+gap);
+      const grad=x.createLinearGradient(0,h-bot-bh,0,h-bot);
+      grad.addColorStop(0,`rgba(0,122,255,${0.25+int*0.4})`);grad.addColorStop(1,`rgba(88,86,214,${0.1+int*0.2})`);
+      x.fillStyle=grad;x.beginPath();x.roundRect(bx,h-bot-bh,barW,bh,2);x.fill();}
+    const dur=(fp[fp.length-1].t-fp[0].t)/1000;
+    x.fillStyle='rgba(0,0,0,.2)';x.font='9px Inter';
+    x.fillText(`${fp.length} pkts | ${dur.toFixed(1)}ms | ${(dur/fp.length).toFixed(2)}ms/pkt`,15,h-2);
   }
 
-  // ── TAS Alignment ──
   function drawTas() {
-    const { x, w, h } = ctx('cTas');
-    x.clearRect(0, 0, w, h);
-    if (!autoTas?.entries) return;
-    const cycleUs = autoTas.cycleUs;
-    const mg = 20, top = 32, barH = 28, gap = 10;
+    const {x,w,h}=getCtx('cTas'); x.clearRect(0,0,w,h);
+    if(!autoTas?.entries)return;
+    const cycleUs=autoTas.cycleUs,mg=16,top=28,barH=24,gap=8,bw=w-mg*2;
+    let bx=mg;
+    for(const e of autoTas.entries){
+      const ew=(e.durationUs/cycleUs)*bw;
+      let bg='rgba(0,0,0,.01)';
+      if(e.gateStates===128)bg='rgba(0,122,255,.12)';
+      else if(e.gateStates===0)bg='rgba(255,149,0,.08)';
+      x.fillStyle=bg;x.fillRect(bx,top,Math.max(ew,1),barH);
+      if(ew>30){x.fillStyle='rgba(0,0,0,.2)';x.font='bold 9px Inter';
+        x.fillText(e.gateStates===128?'TC7 LiDAR':e.gateStates===127?'Best Effort':'G',bx+5,top+barH/2+3);}
+      bx+=ew;}
+    x.strokeStyle='rgba(0,0,0,.06)';x.strokeRect(mg,top,bw,barH);
 
-    // TAS gate bar
-    let bx = mg;
-    const bw = w - mg * 2;
-    for (const e of autoTas.entries) {
-      const ew = (e.durationUs / cycleUs) * bw;
-      let bg = 'rgba(255,255,255,.02)';
-      if (e.gateStates === 128) bg = 'rgba(10,132,255,.25)';
-      else if (e.gateStates === 0) bg = 'rgba(255,159,10,.15)';
-      x.fillStyle = bg;
-      x.fillRect(bx, top, Math.max(ew, 1), barH);
-      if (ew > 30) {
-        x.fillStyle = 'rgba(255,255,255,.3)'; x.font = 'bold 9px Inter';
-        const label = e.gateStates === 128 ? 'TC7' : e.gateStates === 127 ? 'Best Effort' : 'G';
-        x.fillText(label, bx + 6, top + barH / 2 + 3);
-      }
-      bx += ew;
-    }
-    x.strokeStyle = 'rgba(255,255,255,.06)'; x.strokeRect(mg, top, bw, barH);
-
-    // Packet
-    const pktY = top + barH + gap;
-    const pktH = 22;
-    x.fillStyle = 'rgba(255,255,255,.02)';
-    x.fillRect(mg, pktY, bw, pktH);
-
-    if (autoTas.pktTxUs) {
-      const pktW = Math.max((autoTas.pktTxUs / cycleUs) * bw, 4);
-      const phase = (performance.now() / 400) % 1;
-      const lidarSlot = autoTas.entries[0]?.durationUs || 50;
-      const pktX = mg + (phase * lidarSlot / cycleUs) * bw;
-
-      // Jitter range
-      const jUs = autoTas.packetAnalysis?.pktJitterUs || 0;
-      if (jUs > 0) {
-        const jW = (jUs * 2 / cycleUs) * bw;
-        x.fillStyle = 'rgba(255,214,10,.06)';
-        x.fillRect(pktX - jW / 2, pktY, pktW + jW, pktH);
-      }
-
-      // Packet block
-      const pGrad = x.createLinearGradient(pktX, 0, pktX + pktW, 0);
-      pGrad.addColorStop(0, 'rgba(10,132,255,.9)');
-      pGrad.addColorStop(1, 'rgba(94,92,230,.7)');
-      x.fillStyle = pGrad;
-      x.beginPath(); x.roundRect(pktX, pktY + 3, pktW, pktH - 6, 3); x.fill();
-
-      x.fillStyle = 'rgba(255,255,255,.4)'; x.font = '8px Inter';
-      x.fillText(`${autoTas.pktTxUs}µs`, pktX + pktW + 4, pktY + pktH / 2 + 3);
-    }
-
-    // Labels
-    x.fillStyle = 'rgba(255,255,255,.12)'; x.font = '8px Inter';
-    x.fillText('TAS Gates', 2, top + barH / 2 + 3);
-    x.fillText('Packet', 2, pktY + pktH / 2 + 3);
-
-    // Time axis
-    x.fillStyle = 'rgba(255,255,255,.12)';
-    for (let i = 0; i <= 4; i++) {
-      x.fillText(`${(cycleUs * i / 4).toFixed(0)}µs`, mg + (i / 4) * bw, h - 3);
-    }
+    const pktY=top+barH+gap,pktH=18;
+    x.fillStyle='rgba(0,0,0,.015)';x.fillRect(mg,pktY,bw,pktH);
+    if(autoTas.pktTxUs){
+      const pktW=Math.max((autoTas.pktTxUs/cycleUs)*bw,4);
+      const phase=(performance.now()/400)%1;
+      const slot=autoTas.entries[0]?.durationUs||50;
+      const pktX=mg+(phase*slot/cycleUs)*bw;
+      const jUs=autoTas.packetAnalysis?.pktJitterUs||0;
+      if(jUs>0){const jW=(jUs*2/cycleUs)*bw;x.fillStyle='rgba(255,204,0,.06)';x.fillRect(pktX-jW/2,pktY,pktW+jW,pktH);}
+      const pg=x.createLinearGradient(pktX,0,pktX+pktW,0);
+      pg.addColorStop(0,'rgba(0,122,255,.7)');pg.addColorStop(1,'rgba(88,86,214,.5)');
+      x.fillStyle=pg;x.beginPath();x.roundRect(pktX,pktY+3,pktW,pktH-6,3);x.fill();
+      x.fillStyle='rgba(0,0,0,.25)';x.font='8px Inter';x.fillText(`${autoTas.pktTxUs}µs`,pktX+pktW+4,pktY+pktH/2+3);}
+    x.fillStyle='rgba(0,0,0,.1)';x.font='8px Inter';
+    x.fillText('TAS',2,top+barH/2+3);x.fillText('Pkt',2,pktY+pktH/2+3);
+    for(let i=0;i<=4;i++)x.fillText(`${(cycleUs*i/4).toFixed(0)}µs`,mg+(i/4)*bw,h-3);
+    x.fillStyle='rgba(0,122,255,.3)';x.font='bold 8px Inter';
+    x.fillText(`1 cycle = 1 pkt interval (${cycleUs} µs)`,mg,h-14);
   }
 
-  // ── Jitter Histogram ──
   function drawJitter() {
-    const { x, w, h } = ctx('cJitter');
-    x.clearRect(0, 0, w, h);
-    if (packets.length < 10) return;
-
-    // Compute inter-packet intervals
-    const ints = [];
-    for (let i = Math.max(0, packets.length - 200); i < packets.length - 1; i++) {
-      ints.push((packets[i + 1].t - packets[i].t) / 1000); // ms
-    }
-    if (ints.length < 5) return;
-
-    const top = 28, bot = 16;
-    // Histogram: 40 bins from 0 to max*1.2
-    const maxInt = Math.max(...ints) * 1.1;
-    const bins = 50;
-    const binW = maxInt / bins;
-    const counts = new Array(bins).fill(0);
-    for (const v of ints) {
-      const b = Math.min(bins - 1, Math.floor(v / binW));
-      counts[b]++;
-    }
-    const maxCount = Math.max(...counts, 1);
-    const barW = (w - 30) / bins;
-
-    for (let i = 0; i < bins; i++) {
-      if (counts[i] === 0) continue;
-      const bh = (counts[i] / maxCount) * (h - top - bot);
-      const bx = 15 + i * barW;
-      const t = (i * binW) / maxInt;
-      // Color: green near expected, yellow/red for outliers
-      const expected = profile ? profile.pktIntervalUs / 1000 : 3;
-      const dist = Math.abs(i * binW - expected) / expected;
-      let color;
-      if (dist < 0.1) color = 'rgba(48,209,88,.6)';
-      else if (dist < 0.5) color = 'rgba(255,214,10,.5)';
-      else color = 'rgba(255,69,58,.5)';
-
-      x.fillStyle = color;
-      x.beginPath(); x.roundRect(bx, h - bot - bh, Math.max(barW - 1, 1), bh, 1); x.fill();
-    }
-
-    // Expected line
-    if (profile) {
-      const expected = profile.pktIntervalUs / 1000;
-      const ex = 15 + (expected / maxInt) * (w - 30);
-      x.strokeStyle = 'rgba(100,210,255,.4)'; x.lineWidth = 1;
-      x.setLineDash([3, 3]);
-      x.beginPath(); x.moveTo(ex, top); x.lineTo(ex, h - bot); x.stroke();
-      x.setLineDash([]);
-      x.fillStyle = 'rgba(100,210,255,.5)'; x.font = '8px Inter';
-      x.fillText(`${expected.toFixed(1)}ms`, ex + 3, top + 10);
-    }
-
-    // Axis
-    x.fillStyle = 'rgba(255,255,255,.12)'; x.font = '8px Inter';
-    for (let i = 0; i <= 4; i++) {
-      x.fillText(`${(maxInt * i / 4).toFixed(1)}ms`, 15 + (i / 4) * (w - 30), h - 2);
-    }
+    const {x,w,h}=getCtx('cJitter'); x.clearRect(0,0,w,h);
+    if(packets.length<10)return;
+    const ints=[];
+    for(let i=Math.max(0,packets.length-300);i<packets.length-1;i++)
+      ints.push((packets[i+1].t-packets[i].t)/1000);
+    if(ints.length<5)return;
+    const top=24,bot=14,maxInt=Math.max(...ints)*1.1,bins=50,binW=maxInt/bins;
+    const counts=new Array(bins).fill(0);
+    for(const v of ints){const b=Math.min(bins-1,Math.floor(v/binW));counts[b]++;}
+    const maxC=Math.max(...counts,1),barW=(w-30)/bins;
+    const expected=profile?profile.pktIntervalUs/1000:3;
+    for(let i=0;i<bins;i++){if(!counts[i])continue;
+      const bh=(counts[i]/maxC)*(h-top-bot),bx=15+i*barW;
+      const dist=Math.abs(i*binW-expected)/expected;
+      let color=dist<.1?'rgba(52,199,89,.5)':dist<.5?'rgba(255,204,0,.4)':'rgba(255,59,48,.4)';
+      x.fillStyle=color;x.beginPath();x.roundRect(bx,h-bot-bh,Math.max(barW-1,1),bh,1);x.fill();}
+    if(profile){const ex=15+(expected/maxInt)*(w-30);
+      x.strokeStyle='rgba(0,122,255,.3)';x.lineWidth=1;x.setLineDash([3,3]);
+      x.beginPath();x.moveTo(ex,top);x.lineTo(ex,h-bot);x.stroke();x.setLineDash([]);
+      x.fillStyle='rgba(0,122,255,.4)';x.font='8px Inter';x.fillText(`${expected.toFixed(1)}ms expected`,ex+3,top+10);}
+    x.fillStyle='rgba(0,0,0,.15)';x.font='8px Inter';
+    for(let i=0;i<=4;i++)x.fillText(`${(maxInt*i/4).toFixed(1)}ms`,15+(i/4)*(w-30),h-2);
   }
 
-  // ═══════════════════════════════════════════
-  // RENDER LOOP
-  // ═══════════════════════════════════════════
-  function render() {
-    requestAnimationFrame(render);
-    drawScope();
-    drawFrame();
-    drawTas();
-    drawJitter();
-  }
-
-  // ═══════════════════════════════════════════
-  // BOOT
-  // ═══════════════════════════════════════════
-  init().then(() => render());
+  function render(){requestAnimationFrame(render);drawScope();drawFrame();drawTas();drawJitter();}
+  init().then(()=>render());
   </script>
 </body>
 </html>
