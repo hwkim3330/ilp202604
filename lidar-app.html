@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KETI TSN — LiDAR Safety Monitor</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0f;
+      --card: rgba(255,255,255,.06);
+      --border: rgba(255,255,255,.08);
+      --text: #f5f5f7;
+      --text2: rgba(255,255,255,.55);
+      --text3: rgba(255,255,255,.3);
+      --accent: #6366F1;
+      --green: #30d158;
+      --orange: #ff9f0a;
+      --red: #ff453a;
+      --yellow: #ffd60a;
+      --radius: 16px;
+    }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; -webkit-font-smoothing: antialiased; }
+
+    /* Layout: 3D left, panels right */
+    .app { display: grid; grid-template-columns: 1fr 320px; height: 100vh; }
+    #canvas3d { width: 100%; height: 100%; display: block; }
+
+    .sidebar {
+      display: flex; flex-direction: column; gap: 0;
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+    }
+
+    .panel {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title {
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text3); margin-bottom: 10px;
+    }
+
+    /* Status header */
+    .status-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(99,102,241,.03);
+    }
+    .status-header h1 { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; }
+    .status-header .sub { font-size: 0.7rem; color: var(--text2); margin-top: 2px; }
+    .status-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+    .chip {
+      display: flex; align-items: center; gap: 5px;
+      background: var(--card); border: 1px solid var(--border);
+      padding: 4px 12px; border-radius: 100px;
+      font-size: 0.68rem; font-weight: 500;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot-orange { background: var(--orange); }
+    .dot-off { background: var(--text3); }
+    .val { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    /* Safety zone indicator */
+    .zone-indicator {
+      text-align: center; padding: 20px 18px;
+      border-bottom: 1px solid var(--border);
+      transition: background .3s;
+    }
+    .zone-indicator.safe { background: rgba(48,209,88,.06); }
+    .zone-indicator.warning { background: rgba(255,214,10,.08); }
+    .zone-indicator.danger { background: rgba(255,69,58,.1); }
+    .zone-status {
+      font-size: 2rem; font-weight: 900; letter-spacing: -0.03em;
+      transition: color .3s;
+    }
+    .zone-status.safe { color: var(--green); }
+    .zone-status.warning { color: var(--yellow); }
+    .zone-status.danger { color: var(--red); }
+    .zone-detail { font-size: 0.72rem; color: var(--text2); margin-top: 4px; }
+
+    /* Objects list */
+    .obj-list { max-height: 180px; overflow-y: auto; }
+    .obj-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+      font-size: 0.7rem;
+    }
+    .obj-item:last-child { border-bottom: none; }
+    .obj-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .obj-name { flex: 1; font-weight: 600; }
+    .obj-dist { font-variant-numeric: tabular-nums; color: var(--text2); }
+    .obj-pts { font-size: 0.62rem; color: var(--text3); }
+
+    /* Stats grid */
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat-box {
+      background: rgba(255,255,255,.03); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px; text-align: center;
+    }
+    .stat-val { font-size: 1.1rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .stat-label { font-size: 0.58rem; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+
+    /* Zone config */
+    .zone-cfg { display: flex; gap: 6px; align-items: center; font-size: 0.7rem; margin-bottom: 6px; }
+    .zone-cfg label { color: var(--text2); min-width: 60px; }
+    .zone-cfg input {
+      background: rgba(255,255,255,.05); border: 1px solid var(--border);
+      color: var(--text); padding: 4px 8px; border-radius: 6px;
+      font-size: 0.7rem; width: 60px; font-family: inherit; text-align: right;
+    }
+    .zone-cfg .unit { color: var(--text3); font-size: 0.62rem; }
+
+    /* Jitter chart */
+    .jitter-chart { height: 48px; position: relative; overflow: hidden; border-radius: 8px; background: rgba(255,255,255,.02); border: 1px solid var(--border); }
+    .jitter-bar { position: absolute; bottom: 0; width: 2px; transition: height .1s; }
+
+    /* Nav */
+    .nav-panel { padding: 12px 18px; }
+    .nav-panel a {
+      color: var(--text2); text-decoration: none; font-size: 0.72rem; font-weight: 600;
+      padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
+      margin-right: 6px; transition: all .15s; display: inline-block;
+    }
+    .nav-panel a:hover { color: var(--text); border-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <canvas id="canvas3d"></canvas>
+    <div class="sidebar">
+      <!-- Header -->
+      <div class="status-header">
+        <h1>LiDAR Safety Monitor</h1>
+        <div class="sub">Real-time Object Detection via TSN</div>
+        <div class="status-row">
+          <div class="chip"><div class="dot dot-off" id="statusDot"></div><span id="statusText">Connecting</span></div>
+          <div class="chip"><span style="color:var(--text2)">FPS</span> <span class="val" id="fpsVal">0</span></div>
+          <div class="chip"><span style="color:var(--text2)">Pts</span> <span class="val" id="pointsVal">0</span></div>
+        </div>
+      </div>
+
+      <!-- Safety Zone Status -->
+      <div class="zone-indicator safe" id="zoneIndicator">
+        <div class="zone-status safe" id="zoneStatus">SAFE</div>
+        <div class="zone-detail" id="zoneDetail">No objects in danger zone</div>
+      </div>
+
+      <!-- Detected Objects -->
+      <div class="panel">
+        <div class="panel-title">Detected Objects</div>
+        <div class="obj-list" id="objList">
+          <div style="font-size:0.7rem;color:var(--text3)">Waiting for data...</div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="panel">
+        <div class="panel-title">Performance</div>
+        <div class="stats-grid">
+          <div class="stat-box"><div class="stat-val" id="statJitter" style="color:var(--green)">—</div><div class="stat-label">Jitter (ms)</div></div>
+          <div class="stat-box"><div class="stat-val" id="statRange">—</div><div class="stat-label">Max Range</div></div>
+          <div class="stat-box"><div class="stat-val" id="statObjects" style="color:var(--accent)">0</div><div class="stat-label">Objects</div></div>
+          <div class="stat-box"><div class="stat-val" id="statDrops" style="color:var(--green)">0</div><div class="stat-label">Frame Drops</div></div>
+        </div>
+        <div style="margin-top:10px;">
+          <div class="panel-title">Frame Jitter</div>
+          <div class="jitter-chart" id="jitterChart"></div>
+        </div>
+      </div>
+
+      <!-- Zone Config -->
+      <div class="panel">
+        <div class="panel-title">Safety Zones</div>
+        <div class="zone-cfg">
+          <label style="color:var(--red);">Danger</label>
+          <input type="number" id="zoneDanger" value="1.5" step="0.1" min="0.1"> <span class="unit">m</span>
+        </div>
+        <div class="zone-cfg">
+          <label style="color:var(--yellow);">Warning</label>
+          <input type="number" id="zoneWarning" value="3.0" step="0.1" min="0.1"> <span class="unit">m</span>
+        </div>
+        <div class="zone-cfg">
+          <label>Min points</label>
+          <input type="number" id="minClusterPts" value="10" step="1" min="3"> <span class="unit">pts</span>
+        </div>
+      </div>
+
+      <!-- Nav -->
+      <div class="nav-panel">
+        <a href="dashboard.html">Dashboard</a>
+        <a href="board.html">Board</a>
+        <a href="lidar.html">Raw Cloud</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  { "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.167.0/examples/jsm/"
+  }}
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // ── Scene ──
+    const canvas = document.getElementById('canvas3d');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(canvas.parentElement.clientWidth - 320, innerHeight);
+    renderer.setClearColor(0x0a0a0f);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0a0a0f, 40, 100);
+
+    const camera = new THREE.PerspectiveCamera(60, (innerWidth - 320) / innerHeight, 0.1, 200);
+    camera.position.set(0, 12, 18);
+    camera.lookAt(0, 0, 0);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+
+    // Grid
+    scene.add(new THREE.GridHelper(40, 40, 0x222233, 0x151520));
+
+    // ── Safety zone rings ──
+    function makeZoneRing(radius, color, y = -0.3) {
+      const geo = new THREE.RingGeometry(radius - 0.03, radius + 0.03, 64);
+      const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.y = y;
+      return mesh;
+    }
+    const dangerRing = makeZoneRing(1.5, 0xff453a);
+    const warningRing = makeZoneRing(3.0, 0xffd60a);
+    scene.add(dangerRing);
+    scene.add(warningRing);
+
+    // Danger zone fill
+    const dangerFillGeo = new THREE.CircleGeometry(1.5, 64);
+    const dangerFill = new THREE.Mesh(dangerFillGeo, new THREE.MeshBasicMaterial({ color: 0xff453a, transparent: true, opacity: 0.04, side: THREE.DoubleSide }));
+    dangerFill.rotation.x = -Math.PI / 2;
+    dangerFill.position.y = -0.29;
+    scene.add(dangerFill);
+
+    const warningFillGeo = new THREE.RingGeometry(1.5, 3.0, 64);
+    const warningFill = new THREE.Mesh(warningFillGeo, new THREE.MeshBasicMaterial({ color: 0xffd60a, transparent: true, opacity: 0.02, side: THREE.DoubleSide }));
+    warningFill.rotation.x = -Math.PI / 2;
+    warningFill.position.y = -0.29;
+    scene.add(warningFill);
+
+    function updateZoneRings() {
+      const dr = parseFloat(document.getElementById('zoneDanger').value) || 1.5;
+      const wr = parseFloat(document.getElementById('zoneWarning').value) || 3.0;
+      scene.remove(dangerRing, warningRing, dangerFill, warningFill);
+      dangerRing.geometry.dispose(); warningRing.geometry.dispose();
+      dangerFill.geometry.dispose(); warningFill.geometry.dispose();
+      dangerRing.geometry = new THREE.RingGeometry(dr - 0.03, dr + 0.03, 64);
+      warningRing.geometry = new THREE.RingGeometry(wr - 0.03, wr + 0.03, 64);
+      dangerFill.geometry = new THREE.CircleGeometry(dr, 64);
+      warningFill.geometry = new THREE.RingGeometry(dr, wr, 64);
+      scene.add(dangerRing, warningRing, dangerFill, warningFill);
+    }
+    document.getElementById('zoneDanger').addEventListener('change', updateZoneRings);
+    document.getElementById('zoneWarning').addEventListener('change', updateZoneRings);
+
+    // ── Point cloud ──
+    const MAX_POINTS = 16384;
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(MAX_POINTS * 3);
+    const colors = new Float32Array(MAX_POINTS * 3);
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.setDrawRange(0, 0);
+
+    const pointCloud = new THREE.Points(geometry, new THREE.PointsMaterial({
+      size: 0.1, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.85
+    }));
+    scene.add(pointCloud);
+
+    // ── Bounding box pool ──
+    const bboxPool = [];
+    function getBBox(idx) {
+      if (bboxPool[idx]) return bboxPool[idx];
+      const geo = new THREE.BoxGeometry(1, 1, 1);
+      const edges = new THREE.EdgesGeometry(geo);
+      const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xff453a, linewidth: 2, transparent: true, opacity: 0.8 }));
+      scene.add(line);
+      bboxPool[idx] = line;
+      return line;
+    }
+    function hideAllBBoxes() { for (const b of bboxPool) if (b) b.visible = false; }
+
+    // ── Clustering (grid-based) ──
+    function clusterPoints(rawData, nPoints) {
+      const dangerR = parseFloat(document.getElementById('zoneDanger').value) || 1.5;
+      const warningR = parseFloat(document.getElementById('zoneWarning').value) || 3.0;
+      const minPts = parseInt(document.getElementById('minClusterPts').value) || 10;
+      const CELL = 0.5; // grid cell size in meters
+
+      const grid = new Map();
+      // rawData: [x,y,z,intensity, ...] in Ouster frame
+      for (let i = 0; i < nPoints; i++) {
+        const ox = rawData[i * 4];      // Ouster x (forward)
+        const oy = rawData[i * 4 + 1];  // Ouster y (left)
+        const oz = rawData[i * 4 + 2];  // Ouster z (up)
+
+        // Filter: ground removal (z < -0.3m) and ceiling (z > 3m)
+        if (oz < -0.3 || oz > 3.0) continue;
+        // Filter: max range
+        const dist2d = Math.sqrt(ox * ox + oy * oy);
+        if (dist2d > 20) continue;
+
+        const gx = Math.floor(ox / CELL);
+        const gy = Math.floor(oy / CELL);
+        const key = `${gx},${gy}`;
+        if (!grid.has(key)) grid.set(key, { pts: 0, sx: 0, sy: 0, sz: 0, minX: ox, maxX: ox, minY: oy, maxY: oy, minZ: oz, maxZ: oz });
+        const c = grid.get(key);
+        c.pts++;
+        c.sx += ox; c.sy += oy; c.sz += oz;
+        if (ox < c.minX) c.minX = ox; if (ox > c.maxX) c.maxX = ox;
+        if (oy < c.minY) c.minY = oy; if (oy > c.maxY) c.maxY = oy;
+        if (oz < c.minZ) c.minZ = oz; if (oz > c.maxZ) c.maxZ = oz;
+      }
+
+      // Merge adjacent cells into clusters (simple flood-fill)
+      const visited = new Set();
+      const clusters = [];
+
+      for (const [key, cell] of grid) {
+        if (visited.has(key) || cell.pts < 3) continue;
+        // BFS
+        const queue = [key];
+        visited.add(key);
+        let totalPts = 0, sx = 0, sy = 0, sz = 0;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+
+        while (queue.length > 0) {
+          const k = queue.shift();
+          const c = grid.get(k);
+          if (!c) continue;
+          totalPts += c.pts; sx += c.sx; sy += c.sy; sz += c.sz;
+          if (c.minX < minX) minX = c.minX; if (c.maxX > maxX) maxX = c.maxX;
+          if (c.minY < minY) minY = c.minY; if (c.maxY > maxY) maxY = c.maxY;
+          if (c.minZ < minZ) minZ = c.minZ; if (c.maxZ > maxZ) maxZ = c.maxZ;
+
+          const [gx, gy] = k.split(',').map(Number);
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+              if (dx === 0 && dy === 0) continue;
+              const nk = `${gx + dx},${gy + dy}`;
+              if (!visited.has(nk) && grid.has(nk)) {
+                visited.add(nk);
+                queue.push(nk);
+              }
+            }
+          }
+        }
+
+        if (totalPts < minPts) continue;
+
+        const cx = sx / totalPts;
+        const cy = sy / totalPts;
+        const cz = sz / totalPts;
+        const dist = Math.sqrt(cx * cx + cy * cy);
+        let zone = 'safe';
+        if (dist < dangerR) zone = 'danger';
+        else if (dist < warningR) zone = 'warning';
+
+        clusters.push({
+          points: totalPts,
+          center: { x: cx, y: cy, z: cz },
+          min: { x: minX, y: minY, z: minZ },
+          max: { x: maxX, y: maxY, z: maxZ },
+          dist: dist,
+          zone
+        });
+      }
+
+      clusters.sort((a, b) => a.dist - b.dist);
+      return clusters;
+    }
+
+    // ── Frame jitter tracking ──
+    let lastFrameTime = 0;
+    const jitterHistory = [];
+    const MAX_JITTER = 60;
+    let frameDrops = 0;
+    let expectedInterval = 100; // ~10fps
+
+    function trackJitter() {
+      const now = performance.now();
+      if (lastFrameTime > 0) {
+        const interval = now - lastFrameTime;
+        jitterHistory.push(interval);
+        if (jitterHistory.length > MAX_JITTER) jitterHistory.shift();
+        // Detect drops: >3x expected interval
+        if (interval > expectedInterval * 3) frameDrops++;
+      }
+      lastFrameTime = now;
+    }
+
+    function getJitterMs() {
+      if (jitterHistory.length < 2) return 0;
+      const mean = jitterHistory.reduce((a, b) => a + b, 0) / jitterHistory.length;
+      const variance = jitterHistory.reduce((a, b) => a + (b - mean) ** 2, 0) / jitterHistory.length;
+      return Math.sqrt(variance);
+    }
+
+    function renderJitterChart() {
+      const chart = document.getElementById('jitterChart');
+      const maxVal = 200; // ms
+      let html = '';
+      for (let i = 0; i < jitterHistory.length; i++) {
+        const v = jitterHistory[i];
+        const h = Math.min(100, (v / maxVal) * 100);
+        const left = (i / MAX_JITTER) * 100;
+        let color = 'rgba(48,209,88,.6)';
+        if (v > expectedInterval * 2) color = 'rgba(255,214,10,.7)';
+        if (v > expectedInterval * 3) color = 'rgba(255,69,58,.8)';
+        html += `<div class="jitter-bar" style="left:${left}%;height:${h}%;background:${color};"></div>`;
+      }
+      chart.innerHTML = html;
+    }
+
+    // ── Color point cloud with zone awareness ──
+    function updateScene(rawData) {
+      const nPoints = Math.min(rawData.length / 4, MAX_POINTS);
+      const posAttr = geometry.getAttribute('position');
+      const colAttr = geometry.getAttribute('color');
+      const pos = posAttr.array, col = colAttr.array;
+
+      const dangerR = parseFloat(document.getElementById('zoneDanger').value) || 1.5;
+      const warningR = parseFloat(document.getElementById('zoneWarning').value) || 3.0;
+      let maxRange = 0;
+
+      for (let i = 0; i < nPoints; i++) {
+        const ox = rawData[i * 4], oy = rawData[i * 4 + 1], oz = rawData[i * 4 + 2];
+        // Three.js coords
+        pos[i * 3] = oy; pos[i * 3 + 1] = oz; pos[i * 3 + 2] = -ox;
+
+        const dist2d = Math.sqrt(ox * ox + oy * oy);
+        const dist3d = Math.sqrt(ox * ox + oy * oy + oz * oz);
+        if (dist3d > maxRange) maxRange = dist3d;
+
+        // Zone-based coloring
+        if (oz < -0.3 || oz > 3.0) {
+          // Ground/ceiling: dim
+          col[i * 3] = 0.12; col[i * 3 + 1] = 0.12; col[i * 3 + 2] = 0.15;
+        } else if (dist2d < dangerR) {
+          col[i * 3] = 1; col[i * 3 + 1] = 0.27; col[i * 3 + 2] = 0.23;
+        } else if (dist2d < warningR) {
+          col[i * 3] = 1; col[i * 3 + 1] = 0.84; col[i * 3 + 2] = 0.04;
+        } else {
+          // Height-based
+          const t = Math.max(0, Math.min(1, (oz + 1) / 4));
+          col[i * 3] = t * 0.3; col[i * 3 + 1] = 0.5 + t * 0.5; col[i * 3 + 2] = 1 - t * 0.7;
+        }
+      }
+
+      posAttr.needsUpdate = true;
+      colAttr.needsUpdate = true;
+      geometry.setDrawRange(0, nPoints);
+      geometry.computeBoundingSphere();
+
+      // Clustering
+      const clusters = clusterPoints(rawData, nPoints);
+
+      // Update bboxes
+      hideAllBBoxes();
+      for (let i = 0; i < clusters.length && i < 20; i++) {
+        const cl = clusters[i];
+        const bbox = getBBox(i);
+        bbox.visible = true;
+        const sx = Math.max(cl.max.x - cl.min.x, 0.2);
+        const sy = Math.max(cl.max.z - cl.min.z, 0.3);
+        const sz = Math.max(cl.max.y - cl.min.y, 0.2);
+        bbox.scale.set(sz, sy, sx); // swap for Three.js coords
+        bbox.position.set(cl.center.y, cl.center.z, -cl.center.x);
+        // Color by zone
+        const zoneColor = cl.zone === 'danger' ? 0xff453a : cl.zone === 'warning' ? 0xffd60a : 0x30d158;
+        bbox.material.color.setHex(zoneColor);
+      }
+
+      // Jitter
+      trackJitter();
+
+      // Update UI
+      const jitter = getJitterMs();
+      const dangerObjs = clusters.filter(c => c.zone === 'danger');
+      const warnObjs = clusters.filter(c => c.zone === 'warning');
+
+      document.getElementById('statJitter').textContent = jitter.toFixed(1);
+      document.getElementById('statJitter').style.color = jitter < 20 ? 'var(--green)' : jitter < 50 ? 'var(--yellow)' : 'var(--red)';
+      document.getElementById('statRange').textContent = maxRange.toFixed(1) + 'm';
+      document.getElementById('statObjects').textContent = clusters.length;
+      document.getElementById('statDrops').textContent = frameDrops;
+      document.getElementById('statDrops').style.color = frameDrops === 0 ? 'var(--green)' : 'var(--red)';
+
+      // Zone status
+      const zi = document.getElementById('zoneIndicator');
+      const zs = document.getElementById('zoneStatus');
+      const zd = document.getElementById('zoneDetail');
+      if (dangerObjs.length > 0) {
+        zi.className = 'zone-indicator danger';
+        zs.className = 'zone-status danger';
+        zs.textContent = 'DANGER';
+        zd.textContent = `${dangerObjs.length} object(s) within ${dangerR}m — nearest ${dangerObjs[0].dist.toFixed(2)}m`;
+      } else if (warnObjs.length > 0) {
+        zi.className = 'zone-indicator warning';
+        zs.className = 'zone-status warning';
+        zs.textContent = 'WARNING';
+        zd.textContent = `${warnObjs.length} object(s) within ${warningR}m`;
+      } else {
+        zi.className = 'zone-indicator safe';
+        zs.className = 'zone-status safe';
+        zs.textContent = 'SAFE';
+        zd.textContent = 'No objects in monitored zones';
+      }
+
+      // Object list
+      const listEl = document.getElementById('objList');
+      if (clusters.length === 0) {
+        listEl.innerHTML = '<div style="font-size:0.7rem;color:var(--text3)">No objects detected</div>';
+      } else {
+        listEl.innerHTML = clusters.slice(0, 10).map((cl, i) => {
+          const zoneColor = cl.zone === 'danger' ? 'var(--red)' : cl.zone === 'warning' ? 'var(--yellow)' : 'var(--green)';
+          const label = cl.zone === 'danger' ? 'DANGER' : cl.zone === 'warning' ? 'WARN' : 'safe';
+          return `<div class="obj-item">
+            <div class="obj-dot" style="background:${zoneColor}"></div>
+            <span class="obj-name">Object ${i + 1}</span>
+            <span class="obj-dist" style="color:${zoneColor}">${cl.dist.toFixed(2)}m</span>
+            <span class="obj-pts">${cl.points}pts</span>
+          </div>`;
+        }).join('');
+      }
+
+      // FPS / points
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsTime >= 1000) {
+        displayFps = frameCount;
+        frameCount = 0;
+        lastFpsTime = now;
+        if (displayFps > 0) expectedInterval = 1000 / displayFps;
+      }
+      document.getElementById('fpsVal').textContent = displayFps;
+      document.getElementById('pointsVal').textContent = nPoints.toLocaleString();
+    }
+
+    let frameCount = 0, displayFps = 0, lastFpsTime = performance.now();
+
+    // Update jitter chart periodically
+    setInterval(renderJitterChart, 500);
+
+    // ── WebSocket ──
+    function connect() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(`${proto}//${location.host}/ws/lidar`);
+      ws.binaryType = 'arraybuffer';
+      ws.onopen = () => {
+        document.getElementById('statusDot').className = 'dot dot-green';
+        document.getElementById('statusText').textContent = 'Live';
+      };
+      ws.onmessage = (e) => {
+        if (typeof e.data === 'string') return;
+        updateScene(new Float32Array(e.data));
+      };
+      ws.onclose = () => {
+        document.getElementById('statusDot').className = 'dot dot-orange';
+        document.getElementById('statusText').textContent = 'Reconnecting';
+        setTimeout(connect, 2000);
+      };
+      ws.onerror = () => ws.close();
+    }
+    connect();
+
+    // ── Render loop ──
+    (function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    })();
+
+    // ── Resize ──
+    window.addEventListener('resize', () => {
+      const w = innerWidth - 320;
+      camera.aspect = w / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, innerHeight);
+    });
+  </script>
+</body>
+</html>
