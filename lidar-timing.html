@@ -121,7 +121,7 @@
 
     const TC_COLORS = ['#8e8e93','#ff3b30','#34c759','#ff9500','#af52de','#5856d6','#32ade6','#007aff'];
 
-    // ── WebSocket for timing ──
+    // ── WebSocket for timing — all data streams from server ──
     function connectTiming() {
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(`${proto}//${location.host}/ws/lidar-timing-a`);
@@ -130,13 +130,23 @@
         document.getElementById('statusText').textContent = 'Live';
       };
       ws.onmessage = (e) => {
-        const pkt = JSON.parse(e.data);
-        packets.push(pkt);
-        if (packets.length > MAX_PKTS) packets.shift();
-        totalPkts++;
-        if (pkt.newFrame) totalFrames++;
-        document.getElementById('pktCount').textContent = totalPkts;
-        document.getElementById('frameCount').textContent = totalFrames;
+        const msg = JSON.parse(e.data);
+
+        if (msg.type === 'pkt') {
+          // Per-packet timing event
+          packets.push(msg);
+          if (packets.length > MAX_PKTS) packets.shift();
+          totalPkts++;
+          if (msg.newFrame) totalFrames++;
+          document.getElementById('pktCount').textContent = totalPkts;
+          document.getElementById('frameCount').textContent = totalFrames;
+        } else if (msg.type === 'profile') {
+          // Real-time profile + auto TAS from server (~1/sec)
+          profile = msg.profile;
+          autoTas = msg.autoTas;
+          updateStats();
+          renderAutoConfig();
+        }
       };
       ws.onclose = () => {
         document.getElementById('statusDot').className = 'dot dot-off';
@@ -146,22 +156,6 @@
       ws.onerror = () => ws.close();
     }
     connectTiming();
-
-    // ── Fetch profile periodically ──
-    async function fetchProfile() {
-      try {
-        const [pRes, tRes] = await Promise.all([
-          fetch('/api/lidar/profile/lidar-a'),
-          fetch('/api/lidar/auto-tas/lidar-a?cycle=500')
-        ]);
-        profile = await pRes.json();
-        autoTas = await tRes.json();
-        updateStats();
-        renderAutoConfig();
-      } catch {}
-    }
-    fetchProfile();
-    setInterval(fetchProfile, 2000);
 
     function updateStats() {
       if (!profile || profile.error) return;

@@ -291,15 +291,35 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
 
     // Stream timing data to timing clients
     if (timingClients.size > 0) {
-      const timingMsg = JSON.stringify({
+      const pts = cols.reduce((s, c) => s + c.pixels.filter(p => p).length, 0);
+      // Per-packet event
+      const pktMsg = JSON.stringify({
+        type: 'pkt',
         t: Math.round(nowUs),
-        fid,
-        sz: msg.length,
-        pts: cols.reduce((s, c) => s + c.pixels.filter(p => p).length, 0),
+        fid, sz: msg.length, pts,
         newFrame: isNewFrame,
       });
       for (const ws of timingClients) {
-        if (ws.readyState === 1) ws.send(timingMsg);
+        if (ws.readyState === 1) ws.send(pktMsg);
+      }
+
+      // On new frame: send real-time profile + auto TAS
+      if (isNewFrame && frameTimestamps.length >= 5) {
+        // Throttle: only every 10 frames (~1/sec at 10fps)
+        if (stats.frames % 10 === 0) {
+          const prof = getTrafficProfile();
+          const tas = generateTasConfig();
+          if (prof) {
+            const summaryMsg = JSON.stringify({
+              type: 'profile',
+              profile: prof,
+              autoTas: tas,
+            });
+            for (const ws of timingClients) {
+              if (ws.readyState === 1) ws.send(summaryMsg);
+            }
+          }
+        }
       }
     }
 
