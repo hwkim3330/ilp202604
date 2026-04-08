@@ -69,8 +69,10 @@ app.get('/api/lidar/profile/:id', (req, res) => {
 app.get('/api/lidar/auto-tas/:id', (req, res) => {
   const inst = lidar.instances.find(i => i.id === req.params.id);
   if (!inst) return res.status(404).json({ error: 'LiDAR not found' });
-  const cycleUs = req.query.cycle ? parseInt(req.query.cycle) : undefined;
-  const config = inst.generateTasConfig(cycleUs);
+  const opts = {};
+  if (req.query.cycle) opts.cycleUs = parseInt(req.query.cycle);
+  if (req.query.margin) opts.marginFactor = parseFloat(req.query.margin);
+  const config = inst.generateTasConfig(opts);
   if (!config) return res.json({ error: 'Not enough data yet' });
   res.json(config);
 });

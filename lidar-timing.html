@@ -93,7 +93,7 @@
 
   <!-- TAS overlay -->
   <div class="tas-section">
-    <div class="scope-title">TAS Gate Schedule vs LiDAR Traffic (per cycle)</div>
+    <div class="scope-title">TAS Gate Schedule vs LiDAR Packet (1 pkt/cycle, derived from measured interval)</div>
     <canvas class="tas-canvas" id="tasCanvas"></canvas>
   </div>
 
@@ -182,7 +182,14 @@
         el.innerHTML = `<span style="color:var(--text3)">${autoTas?.error || 'Waiting...'}</span>`;
         return;
       }
-      let html = `<div style="margin-bottom:8px;font-weight:700;">Cycle: ${autoTas.cycleUs} µs — LiDAR utilization: ${autoTas.utilization}%</div>`;
+      const pa = autoTas.packetAnalysis || {};
+      let html = `<div style="margin-bottom:6px;font-weight:700;font-size:0.85rem;">
+        Cycle: <span style="color:var(--cyan)">${autoTas.cycleUs} µs</span>
+        <span style="color:var(--text3);font-weight:400;font-size:0.7rem;"> (from pkt interval ${autoTas.naturalCycleUs} µs)</span>
+      </div>`;
+      html += `<div style="font-size:0.68rem;color:var(--text2);margin-bottom:10px;">
+        1 pkt/cycle | Wire: ${autoTas.pktTxUs} µs | Util: ${autoTas.utilization}% | ${pa.bandwidthMbps || '?'} Mbps
+      </div>`;
       const totalUs = autoTas.entries.reduce((s, e) => s + e.durationUs, 0);
       for (const e of autoTas.entries) {
         const w = (e.durationUs / totalUs * 100);
@@ -193,9 +200,10 @@
           <span style="color:var(--text3);margin-left:auto;">${e.durationUs} µs</span>
         </div>`;
       }
-      if (autoTas.profile) {
-        html += `<div style="margin-top:8px;font-size:0.65rem;color:var(--text3);">Wire time: ${autoTas.lidarWireUs} µs/cycle | Margin: ${autoTas.margin} | Measured: ${autoTas.profile.bandwidthMbps} Mbps</div>`;
-      }
+      html += `<div style="margin-top:10px;font-size:0.62rem;color:var(--text3);line-height:1.5;">
+        Packet: ${pa.pktSize}B → ${pa.pktTxUs}µs wire | Interval: ${pa.pktIntervalUs}µs ± ${pa.pktJitterUs}µs jitter<br>
+        Frame: ${pa.pktsPerFrame} pkts × ${pa.fps} fps = ${(pa.frameIntervalUs/1000).toFixed(1)}ms period
+      </div>`;
       el.innerHTML = html;
       document.getElementById('btnPush').disabled = false;
     }
@@ -384,22 +392,39 @@
       ctx.strokeStyle = 'rgba(255,255,255,.1)';
       ctx.strokeRect(margin, barY, barW, barH);
 
-      // LiDAR traffic overlay — where packets fall within cycle
+      // LiDAR packet: 1 per cycle (derived model)
       const lidarY = barY + barH + 8;
-      const lidarH = 20;
+      const lidarH = 24;
 
-      ctx.fillStyle = 'rgba(255,255,255,.06)';
+      ctx.fillStyle = 'rgba(255,255,255,.04)';
       ctx.fillRect(margin, lidarY, barW, lidarH);
 
-      // Distribute packets evenly across the cycle (continuous streaming)
-      if (profile.pktsPerFrame > 0) {
-        const pktsPerCycle = profile.pktsPerFrame * (cycleUs / profile.frameIntervalUs);
-        const pktTxUs = (profile.pktSize + 38) * 8 / 1000; // µs on 1Gbps
-        for (let i = 0; i < Math.ceil(pktsPerCycle); i++) {
-          const pktX = margin + (i * profile.pktIntervalUs * cycleUs / profile.frameIntervalUs / cycleUs) * barW;
-          const pktW = Math.max((pktTxUs / cycleUs) * barW, 2);
-          ctx.fillStyle = 'rgba(99,102,241,.7)';
-          ctx.fillRect(pktX, lidarY + 2, pktW, lidarH - 4);
+      if (autoTas?.pktTxUs) {
+        // Single packet — arrives somewhere in the cycle
+        const pktW = Math.max((autoTas.pktTxUs / cycleUs) * barW, 3);
+        // Show packet at random-ish position (simulating arrival uncertainty)
+        const arrivalOffset = Math.sin(Date.now() / 300) * 0.3 + 0.5; // oscillate for visibility
+        const lidarSlot = autoTas.entries[0]?.durationUs || 50;
+        const pktX = margin + (arrivalOffset * lidarSlot / cycleUs) * barW;
+
+        // Packet body
+        ctx.fillStyle = 'rgba(99,102,241,.85)';
+        ctx.fillRect(pktX, lidarY + 3, pktW, lidarH - 6);
+
+        // Label
+        ctx.fillStyle = 'rgba(255,255,255,.6)';
+        ctx.font = 'bold 9px Inter';
+        ctx.fillText(`${autoTas.pktTxUs}µs`, pktX + pktW + 4, lidarY + lidarH / 2 + 3);
+
+        // Show jitter range
+        if (autoTas.packetAnalysis?.pktJitterUs > 0) {
+          const jitterW = (autoTas.packetAnalysis.pktJitterUs / cycleUs) * barW;
+          ctx.fillStyle = 'rgba(255,214,10,.1)';
+          ctx.fillRect(pktX - jitterW / 2, lidarY + 1, pktW + jitterW, lidarH - 2);
+          ctx.strokeStyle = 'rgba(255,214,10,.3)';
+          ctx.setLineDash([2, 2]);
+          ctx.strokeRect(pktX - jitterW / 2, lidarY + 1, pktW + jitterW, lidarH - 2);
+          ctx.setLineDash([]);
         }
       }
 
@@ -407,14 +432,20 @@
       ctx.fillStyle = 'rgba(255,255,255,.2)';
       ctx.font = '9px Inter';
       ctx.fillText('TAS Gates', 2, barY + barH / 2 + 3);
-      ctx.fillText('LiDAR pkts', 2, lidarY + lidarH / 2 + 3);
+      ctx.fillText('LiDAR pkt', 2, lidarY + lidarH / 2 + 3);
 
       // Time axis
       ctx.fillStyle = 'rgba(255,255,255,.15)';
-      for (let i = 0; i <= 5; i++) {
-        const tx = margin + (i / 5) * barW;
-        ctx.fillText(`${(cycleUs * i / 5).toFixed(0)}µs`, tx, h - 2);
+      const steps = cycleUs > 1000 ? 5 : 4;
+      for (let i = 0; i <= steps; i++) {
+        const tx = margin + (i / steps) * barW;
+        ctx.fillText(`${(cycleUs * i / steps).toFixed(0)}µs`, tx, h - 2);
       }
+
+      // Annotation: cycle = packet interval
+      ctx.fillStyle = 'rgba(6,182,212,.4)';
+      ctx.font = 'bold 9px Inter';
+      ctx.fillText(`Cycle = pkt interval (${cycleUs}µs) → 1 pkt/cycle`, margin, h - 14);
     }
 
     // ── Animation loop ──

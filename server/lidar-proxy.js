@@ -193,50 +193,73 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
   }
 
   /**
-   * Generate optimal TAS config based on observed traffic profile
+   * Generate optimal TAS config derived from observed LiDAR packet pattern.
    *
-   * LiDAR like Ouster OS-1 streams continuously (~8.7 Mbps on 1Gbps link).
-   * TAS slot = proportion of cycle the LiDAR actually needs on the wire.
+   * The cycle time is NOT arbitrary — it comes from the measured inter-packet
+   * interval. Each cycle handles exactly 1 LiDAR packet.
    *
-   * @param {number} cycleUs - TAS cycle time in µs (default: 500)
+   * @param {object} opts
+   * @param {number} opts.cycleUs - Override cycle (default: auto from packet interval)
+   * @param {number} opts.marginFactor - Jitter margin multiplier (default: 2.0)
+   * @param {number} opts.linkMbps - Link rate (default: 1000)
    */
-  function generateTasConfig(cycleUs) {
+  function generateTasConfig(opts = {}) {
     const profile = getTrafficProfile();
     if (!profile) return null;
 
-    if (!cycleUs) cycleUs = 500;
+    const linkMbps = opts.linkMbps || 1000;
+    const marginFactor = opts.marginFactor || 2.0;
 
-    // LiDAR bandwidth as fraction of link rate
-    const linkMbps = 1000; // 1 Gbps
-    const lidarFraction = profile.bandwidthMbps / linkMbps;
+    // ── Derive cycle from packet pattern ──
+    // Natural cycle = inter-packet interval (1 LiDAR pkt per cycle)
+    const naturalCycleUs = profile.pktIntervalUs;
+    const cycleUs = opts.cycleUs || Math.round(naturalCycleUs / 10) * 10; // round to 10µs
 
-    // Transmission time per packet on 1Gbps
-    const pktTxUs = (profile.pktSize + 38) * 8 / linkMbps; // +38 = eth overhead, in µs
-    // Packets per cycle
-    const pktsPerCycle = profile.pktsPerFrame * (cycleUs / profile.frameIntervalUs);
-    // Wire time needed per cycle
-    const lidarWireUs = pktTxUs * pktsPerCycle;
-    // Add margin: 50% extra for jitter + burst alignment
-    const lidarSlotUs = Math.ceil(lidarWireUs * 1.5);
-    const guardBandUs = 1;
+    // ── Per-packet wire time ──
+    const pktBytes = profile.pktSize + 20 + 14 + 4; // IP + Ethernet + FCS
+    const pktTxUs = pktBytes * 8 / linkMbps;         // transmission time in µs
 
-    const beSlotUs = cycleUs - lidarSlotUs - guardBandUs * 2;
+    // ── LiDAR slot: tx time + jitter margin ──
+    const lidarSlotUs = Math.round(pktTxUs * marginFactor * 10) / 10;
+    const guardUs = 1;
+    const beSlotUs = Math.round((cycleUs - lidarSlotUs - guardUs * 2) * 10) / 10;
+
     if (beSlotUs < 1) {
-      return { error: 'Cycle too short', profile, cycleUs, lidarSlotUs };
+      return { error: 'Cycle too short for packet', profile, cycleUs, pktTxUs, lidarSlotUs };
     }
 
+    // ── Packet timing analysis ──
+    // Compute inter-packet jitter from raw timestamps
+    const pktJitterUs = pktTimestamps.length > 2 ? (() => {
+      const ints = [];
+      for (let i = 1; i < pktTimestamps.length; i++) ints.push(pktTimestamps[i] - pktTimestamps[i-1]);
+      const mean = ints.reduce((a,b) => a+b,0) / ints.length;
+      return Math.round(Math.sqrt(ints.reduce((s,v) => s + (v-mean)**2, 0) / ints.length));
+    })() : 0;
+
     return {
+      derived: true,
       cycleUs,
+      naturalCycleUs: Math.round(naturalCycleUs),
+      pktTxUs: Math.round(pktTxUs * 100) / 100,
       entries: [
-        { gateStates: 128, durationUs: Math.round(lidarSlotUs * 10) / 10, note: 'TC7 LiDAR' },
-        { gateStates: 0, durationUs: guardBandUs, note: 'guard band' },
-        { gateStates: 127, durationUs: Math.round(beSlotUs * 10) / 10, note: 'TC0-6 Best Effort' },
-        { gateStates: 0, durationUs: guardBandUs, note: 'guard band' },
+        { gateStates: 128, durationUs: lidarSlotUs, note: `TC7 LiDAR (1 pkt × ${marginFactor}x margin)` },
+        { gateStates: 0, durationUs: guardUs, note: 'guard band' },
+        { gateStates: 127, durationUs: beSlotUs, note: 'TC0-6 Best Effort' },
+        { gateStates: 0, durationUs: guardUs, note: 'guard band' },
       ],
+      utilization: Math.round(lidarSlotUs / cycleUs * 10000) / 100,
+      packetAnalysis: {
+        pktSize: profile.pktSize,
+        pktTxUs: Math.round(pktTxUs * 100) / 100,
+        pktIntervalUs: profile.pktIntervalUs,
+        pktJitterUs,
+        pktsPerFrame: profile.pktsPerFrame,
+        frameIntervalUs: profile.frameIntervalUs,
+        fps: profile.fps,
+        bandwidthMbps: profile.bandwidthMbps,
+      },
       profile,
-      utilization: Math.round(lidarSlotUs / cycleUs * 1000) / 10,
-      lidarWireUs: Math.round(lidarWireUs * 100) / 100,
-      margin: '1.5x',
     };
   }
 
