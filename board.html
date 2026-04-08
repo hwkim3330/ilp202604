@@ -273,13 +273,10 @@
       <img src="keti.png" alt="KETI" class="logo" onerror="this.style.display='none'">
       <h1>LAN9662</h1>
       <p class="sub">IEEE 802.1Qbv Time-Aware Shaper Configuration</p>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
-        <select id="boardTransport" style="padding:6px 12px;border-radius:10px;border:1px solid var(--border);font-size:0.82rem;font-family:inherit;background:var(--card);cursor:pointer;">
-          <option value="serial">Serial (/dev/ttyACM0)</option>
-          <option value="eth">Ethernet (CoAP/UDP)</option>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap;">
+        <select id="boardSelect" style="padding:6px 12px;border-radius:10px;border:1px solid var(--border);font-size:0.82rem;font-family:inherit;background:var(--card);cursor:pointer;">
+          <option value="">Loading boards...</option>
         </select>
-        <input id="boardHost" type="text" placeholder="192.168.1.10" value="192.168.1.10"
-          style="display:none;padding:6px 12px;border-radius:10px;border:1px solid var(--border);font-size:0.82rem;font-family:inherit;width:140px;background:var(--card);">
         <div id="statusChip" class="chip chip-err">
           <span class="dot"></span>
           <span id="statusText">Connecting...</span>
@@ -304,7 +301,9 @@
     </div>
 
     <div class="nav-bar">
+      <a href="dashboard.html">Dashboard</a>
       <a href="solver.html">GCL Solver</a>
+      <a href="lidar.html">LiDAR</a>
       <a href="index.html">Home</a>
     </div>
   </div>
@@ -426,15 +425,39 @@
     let lastPortsData = {};   // last read data for re-render
     const editState = {};      // portNum → { cycleUs, entries: [{gateStates, durationUs}] }
 
-    /* ── Transport selection ── */
-    const boardTransportSel = document.getElementById('boardTransport');
-    const boardHostInput = document.getElementById('boardHost');
-    boardTransportSel.addEventListener('change', () => {
-      boardHostInput.style.display = boardTransportSel.value === 'eth' ? 'inline-block' : 'none';
+    /* ── Board selection (config-driven, Ethernet default) ── */
+    const boardSelect = document.getElementById('boardSelect');
+    let serverBoards = [];
+    let selectedBoardId = null;
+
+    async function loadBoards() {
+      try {
+        const res = await fetch('/api/config');
+        const cfg = await res.json();
+        serverBoards = cfg.boards || [];
+        boardSelect.innerHTML = '';
+        for (const b of serverBoards) {
+          const opt = document.createElement('option');
+          opt.value = b.id;
+          opt.textContent = `${b.id} (${b.host})`;
+          boardSelect.appendChild(opt);
+        }
+        if (serverBoards.length > 0) {
+          selectedBoardId = serverBoards[0].id;
+          boardSelect.value = selectedBoardId;
+        }
+      } catch { boardSelect.innerHTML = '<option>Server offline</option>'; }
+    }
+    boardSelect.addEventListener('change', () => {
+      selectedBoardId = boardSelect.value;
+      hasData = false;
+      lastPortsData = {};
       checkStatus();
     });
-    function getBoardTransport() { return boardTransportSel.value; }
-    function getBoardHost() { return boardHostInput.value.trim(); }
+
+    function getSelectedBoard() { return serverBoards.find(b => b.id === selectedBoardId); }
+    function getBoardTransport() { return 'eth'; }
+    function getBoardHost() { return getSelectedBoard()?.host || '192.168.1.10'; }
 
     /* ══════════════════════════════════════════
        Board Status
@@ -443,20 +466,13 @@
       const chip = document.getElementById('statusChip');
       const text = document.getElementById('statusText');
       const btn = document.getElementById('btnRead');
-      const transport = getBoardTransport();
+      if (!selectedBoardId) { text.textContent = 'No board'; btn.disabled = true; return; }
       try {
-        let url = `/api/board/status?transport=${transport}`;
-        if (transport === 'serial') url += '&device=/dev/ttyACM0';
-        else url += `&host=${encodeURIComponent(getBoardHost())}`;
-        const res = await fetch(url);
+        const res = await fetch(`/api/board/${selectedBoardId}/status`);
         const d = await res.json();
         boardConnected = d.connected;
         chip.className = 'chip ' + (d.connected ? 'chip-ok' : 'chip-err');
-        if (transport === 'serial') {
-          text.textContent = d.connected ? `Connected  ${d.device}` : 'Disconnected';
-        } else {
-          text.textContent = d.connected ? `Connected  ${getBoardHost()}` : 'Unreachable';
-        }
+        text.textContent = d.connected ? `Connected ${d.host}` : `Offline ${d.host}`;
         btn.disabled = !d.connected || reading;
       } catch {
         chip.className = 'chip chip-err';
@@ -467,12 +483,13 @@
       if (!boardConnected && !hasData && !reading) {
         document.getElementById('portsContainer').innerHTML = `
           <div class="loading-msg" style="color:var(--text3)">
-            Board not connected. Plug in the LAN9662 to get started.
+            Board not connected. Check Ethernet connection to ${getBoardHost()}.
           </div>`;
       }
+      renderProfiles();
     }
-    checkStatus().then(() => { if (boardConnected) readBoard(); });
-    setInterval(checkStatus, 5000);
+    loadBoards().then(() => checkStatus().then(() => { if (boardConnected) readBoard(); }));
+    setInterval(checkStatus, 8000);
 
     /* ══════════════════════════════════════════
        Quick Profiles
@@ -525,7 +542,7 @@
           const res = await fetch('/api/gcl/push-port', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ port: pn, cycleUs: cfg.cycleUs, entries: cfg.entries, transport: getBoardTransport(), host: getBoardHost() || undefined })
+            body: JSON.stringify({ port: pn, cycleUs: cfg.cycleUs, entries: cfg.entries, transport: 'eth', host: getBoardHost() })
           });
           const data = await res.json();
           if (!data.success) { allOk = false; showToast(`Port ${pn} failed: ${data.error || 'unknown'}`, 'err'); }
@@ -549,23 +566,19 @@
        Read Board
        ══════════════════════════════════════════ */
     async function readBoard() {
-      if (reading || !boardConnected) return;
+      if (reading || !boardConnected || !selectedBoardId) return;
       reading = true;
       const btn = document.getElementById('btnRead');
       const ct = document.getElementById('portsContainer');
       const start = Date.now();
       btn.disabled = true; btn.textContent = 'Reading...';
-      ct.innerHTML = `<div class="loading-msg"><div class="spinner-ring"></div><br>Reading TAS configuration...<br><span style="font-size:.8rem;color:var(--text3)">~30 seconds</span></div>`;
+      ct.innerHTML = `<div class="loading-msg"><div class="spinner-ring"></div><br>Reading TAS from ${selectedBoardId}...<br><span style="font-size:.8rem;color:var(--text3)">Ethernet → Serial fallback</span></div>`;
       try {
-        const transport = getBoardTransport();
-        let readUrl = `/api/gcl/read?transport=${transport}`;
-        if (transport === 'serial') readUrl += '&device=/dev/ttyACM0';
-        else readUrl += `&host=${encodeURIComponent(getBoardHost())}`;
-        const res = await fetch(readUrl);
+        const res = await fetch(`/api/board/${selectedBoardId}/gcl`);
         const data = await res.json();
         if (data.error) { ct.innerHTML = `<div class="error-card">${data.error}</div>`; return; }
         const sec = ((Date.now() - start) / 1000).toFixed(1);
-        document.getElementById('readTime').textContent = `${new Date().toLocaleTimeString()} \u00b7 ${sec}s`;
+        document.getElementById('readTime').textContent = `${selectedBoardId} \u00b7 ${new Date().toLocaleTimeString()} \u00b7 ${sec}s`;
         hasData = true;
         lastPortsData = data.ports;
         renderPorts(data.ports);
@@ -832,8 +845,8 @@
             port: portNum,
             cycleUs: st.cycleUs,
             entries: st.entries,
-            transport: getBoardTransport(),
-            host: getBoardHost() || undefined
+            transport: 'eth',
+            host: getBoardHost()
           })
         });
         const data = await res.json();
