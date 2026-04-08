@@ -115,16 +115,142 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
     }
   }
 
+  // ── Traffic profiling ──
+  const PROFILE_WINDOW = 100; // track last N frames
   let pktCount = 0;
+  let pktTimestamps = [];      // per-packet arrival times (µs precision)
+  let frameTimestamps = [];    // per-frame completion times
+  let framePktCounts = [];     // packets per frame
+  let frameByteCounts = [];    // bytes per frame
+  let currentFramePkts = 0;
+  let currentFrameBytes = 0;
+
+  function recordFrameProfile() {
+    const now = process.hrtime.bigint(); // nanoseconds
+    frameTimestamps.push(Number(now) / 1000); // µs
+    framePktCounts.push(currentFramePkts);
+    frameByteCounts.push(currentFrameBytes);
+    if (frameTimestamps.length > PROFILE_WINDOW) {
+      frameTimestamps.shift();
+      framePktCounts.shift();
+      frameByteCounts.shift();
+    }
+    currentFramePkts = 0;
+    currentFrameBytes = 0;
+  }
+
+  function getTrafficProfile() {
+    if (frameTimestamps.length < 3) return null;
+
+    // Frame intervals
+    const intervals = [];
+    for (let i = 1; i < frameTimestamps.length; i++) {
+      intervals.push(frameTimestamps[i] - frameTimestamps[i - 1]);
+    }
+    const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+    const minInterval = Math.min(...intervals);
+    const maxInterval = Math.max(...intervals);
+    const jitter = Math.sqrt(intervals.reduce((s, v) => s + (v - avgInterval) ** 2, 0) / intervals.length);
+
+    const avgPktsPerFrame = framePktCounts.reduce((a, b) => a + b, 0) / framePktCounts.length;
+    const avgBytesPerFrame = frameByteCounts.reduce((a, b) => a + b, 0) / frameByteCounts.length;
+    const fps = avgInterval > 0 ? 1e6 / avgInterval : 0;
+    const bandwidthMbps = avgBytesPerFrame * fps * 8 / 1e6;
+
+    // Per-packet intervals (within recent packets)
+    const pktIntervals = [];
+    for (let i = 1; i < pktTimestamps.length; i++) {
+      pktIntervals.push(pktTimestamps[i] - pktTimestamps[i - 1]);
+    }
+    const avgPktInterval = pktIntervals.length > 0 ? pktIntervals.reduce((a, b) => a + b, 0) / pktIntervals.length : 0;
+
+    // Burst analysis: how long does one frame's packets take to arrive
+    // Approximate: avgPktsPerFrame * avgPktInterval
+    const burstDurationUs = avgPktsPerFrame * avgPktInterval;
+
+    return {
+      fps: Math.round(fps * 10) / 10,
+      frameIntervalUs: Math.round(avgInterval),
+      frameIntervalMinUs: Math.round(minInterval),
+      frameIntervalMaxUs: Math.round(maxInterval),
+      jitterUs: Math.round(jitter),
+      pktsPerFrame: Math.round(avgPktsPerFrame),
+      bytesPerFrame: Math.round(avgBytesPerFrame),
+      pktSize: 3392,
+      pktIntervalUs: Math.round(avgPktInterval),
+      burstDurationUs: Math.round(burstDurationUs),
+      bandwidthMbps: Math.round(bandwidthMbps * 100) / 100,
+      samples: frameTimestamps.length,
+    };
+  }
+
+  /**
+   * Generate optimal TAS config based on observed traffic profile
+   *
+   * LiDAR like Ouster OS-1 streams continuously (~8.7 Mbps on 1Gbps link).
+   * TAS slot = proportion of cycle the LiDAR actually needs on the wire.
+   *
+   * @param {number} cycleUs - TAS cycle time in µs (default: 500)
+   */
+  function generateTasConfig(cycleUs) {
+    const profile = getTrafficProfile();
+    if (!profile) return null;
+
+    if (!cycleUs) cycleUs = 500;
+
+    // LiDAR bandwidth as fraction of link rate
+    const linkMbps = 1000; // 1 Gbps
+    const lidarFraction = profile.bandwidthMbps / linkMbps;
+
+    // Transmission time per packet on 1Gbps
+    const pktTxUs = (profile.pktSize + 38) * 8 / linkMbps; // +38 = eth overhead, in µs
+    // Packets per cycle
+    const pktsPerCycle = profile.pktsPerFrame * (cycleUs / profile.frameIntervalUs);
+    // Wire time needed per cycle
+    const lidarWireUs = pktTxUs * pktsPerCycle;
+    // Add margin: 50% extra for jitter + burst alignment
+    const lidarSlotUs = Math.ceil(lidarWireUs * 1.5);
+    const guardBandUs = 1;
+
+    const beSlotUs = cycleUs - lidarSlotUs - guardBandUs * 2;
+    if (beSlotUs < 1) {
+      return { error: 'Cycle too short', profile, cycleUs, lidarSlotUs };
+    }
+
+    return {
+      cycleUs,
+      entries: [
+        { gateStates: 128, durationUs: Math.round(lidarSlotUs * 10) / 10, note: 'TC7 LiDAR' },
+        { gateStates: 0, durationUs: guardBandUs, note: 'guard band' },
+        { gateStates: 127, durationUs: Math.round(beSlotUs * 10) / 10, note: 'TC0-6 Best Effort' },
+        { gateStates: 0, durationUs: guardBandUs, note: 'guard band' },
+      ],
+      profile,
+      utilization: Math.round(lidarSlotUs / cycleUs * 1000) / 10,
+      lidarWireUs: Math.round(lidarWireUs * 100) / 100,
+      margin: '1.5x',
+    };
+  }
+
   udp.on('message', (msg) => {
+    const nowUs = Number(process.hrtime.bigint()) / 1000;
     pktCount++;
     if (pktCount <= 3) console.log(`  LiDAR [${id}] pkt #${pktCount}: ${msg.length} bytes`);
     if (msg.length !== 3392) return;
+
+    // Track packet timestamps (keep last 500)
+    pktTimestamps.push(nowUs);
+    if (pktTimestamps.length > 500) pktTimestamps.shift();
+
+    currentFramePkts++;
+    currentFrameBytes += msg.length;
+
     const cols = parsePacket(msg);
     if (cols.length === 0) return;
 
     const fid = cols[0].frameId;
     if (fid !== currentFrameId && currentFrameId !== -1) {
+      recordFrameProfile();
       broadcastFrame(framePoints);
       framePoints = [];
     }
@@ -147,7 +273,9 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
 
   return {
     id,
-    getStats: () => ({ ...stats, id, clients: clients.size })
+    getStats: () => ({ ...stats, id, clients: clients.size }),
+    getTrafficProfile,
+    generateTasConfig,
   };
 }
 

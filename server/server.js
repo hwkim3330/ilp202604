@@ -56,6 +56,25 @@ app.get('/api/boards', (req, res) => {
   res.json(boards);
 });
 
+// LiDAR traffic profile — observed timing analysis
+app.get('/api/lidar/profile/:id', (req, res) => {
+  const inst = lidar.instances.find(i => i.id === req.params.id);
+  if (!inst) return res.status(404).json({ error: 'LiDAR not found' });
+  const profile = inst.getTrafficProfile();
+  if (!profile) return res.json({ error: 'Not enough data yet, wait a few seconds' });
+  res.json(profile);
+});
+
+// Auto-generate TAS config from observed LiDAR traffic
+app.get('/api/lidar/auto-tas/:id', (req, res) => {
+  const inst = lidar.instances.find(i => i.id === req.params.id);
+  if (!inst) return res.status(404).json({ error: 'LiDAR not found' });
+  const cycleUs = req.query.cycle ? parseInt(req.query.cycle) : undefined;
+  const config = inst.generateTasConfig(cycleUs);
+  if (!config) return res.json({ error: 'Not enough data yet' });
+  res.json(config);
+});
+
 httpServer.listen(port, () => {
   console.log(`\n  KETI TSN Platform (Multi-Board)`);
   console.log(`  ────────────────────────────────`);
