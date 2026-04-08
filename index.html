@@ -1,147 +1,279 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KETI TSN &mdash; ILP Solver + LAN9662</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KETI TSN Platform</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #ffffff; --bg2: #f5f5f7;
+      --text: #1d1d1f; --text2: #6e6e73; --text3: #aeaeb2;
+      --blue: #007aff; --green: #34c759; --orange: #ff9500; --red: #ff3b30;
+      --indigo: #5856d6; --cyan: #32ade6;
+      --border: rgba(0,0,0,.06);
+      --shadow: 0 2px 12px rgba(0,0,0,.04);
+      --shadow-lg: 0 8px 30px rgba(0,0,0,.06);
+    }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #f8f9fa 0%, #eef2ff 50%, #e0e7ff 100%);
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
     }
-    .container {
-      max-width: 700px; width: 90%; padding: 40px 0;
+
+    .wrap { max-width: 880px; margin: 0 auto; padding: 60px 24px 80px; }
+
+    /* Hero */
+    .hero { text-align: center; margin-bottom: 56px; }
+    .hero-logo { height: 36px; margin-bottom: 20px; opacity: .5; }
+    .hero h1 {
+      font-size: 3rem; font-weight: 900; letter-spacing: -0.04em; line-height: 1;
+      background: linear-gradient(135deg, #1d1d1f, #6e6e73);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
-    .header {
-      text-align: center; margin-bottom: 40px;
+    .hero .sub {
+      font-size: 1.1rem; color: var(--text2); margin-top: 12px;
+      font-weight: 400; line-height: 1.5;
     }
-    .header img { height: 48px; margin-bottom: 12px; }
-    .header h1 {
-      font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em;
-      background: linear-gradient(135deg, #6366F1, #818CF8);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    .hero .sub strong { color: var(--text); font-weight: 600; }
+
+    /* Status bar */
+    .status-bar {
+      display: flex; justify-content: center; gap: 16px;
+      margin-top: 24px; flex-wrap: wrap;
     }
-    .header p { color: #64748b; font-size: 0.92rem; margin-top: 8px; }
-    .cards { display: grid; gap: 16px; }
-    .card {
-      background: rgba(255,255,255,0.95); border: 1px solid rgba(99,102,241,0.15);
-      border-radius: 16px; padding: 28px 32px; text-decoration: none;
-      transition: all 0.2s; box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-      display: block; color: inherit;
+    .status-chip {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 16px; border-radius: 100px;
+      background: var(--bg2); border: 1px solid var(--border);
+      font-size: 0.75rem; font-weight: 500; color: var(--text2);
     }
-    .card:hover {
-      border-color: rgba(99,102,241,0.4);
-      box-shadow: 0 8px 30px rgba(99,102,241,0.12);
+    .sdot { width: 7px; height: 7px; border-radius: 50%; }
+    .sdot-on { background: var(--green); box-shadow: 0 0 6px rgba(52,199,89,.4); }
+    .sdot-off { background: var(--text3); }
+
+    /* Pages grid */
+    .pages { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 48px; }
+    @media (max-width: 640px) { .pages { grid-template-columns: 1fr; } }
+
+    .page-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 20px; padding: 28px 28px 24px;
+      text-decoration: none; color: inherit;
+      transition: all .2s; display: flex; flex-direction: column;
+      box-shadow: var(--shadow);
+    }
+    .page-card:hover {
+      border-color: rgba(0,122,255,.3);
+      box-shadow: var(--shadow-lg);
       transform: translateY(-2px);
     }
-    .card h2 { font-size: 1.2rem; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
-    .card p { font-size: 0.85rem; color: #64748b; line-height: 1.5; }
-    .badge {
-      display: inline-block; padding: 3px 10px; border-radius: 6px;
-      font-size: 0.72rem; font-weight: 600; margin-top: 10px;
+    .page-card.featured {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, #f5f5f7, #eef2ff);
+      border-color: rgba(0,122,255,.15);
     }
-    .badge-solver { background: rgba(99,102,241,0.1); color: #6366F1; }
-    .badge-board { background: rgba(5,150,105,0.1); color: #059669; }
-    .badge-cli { background: rgba(217,119,6,0.1); color: #d97706; }
-    .board-info {
-      margin-top: 32px; padding: 20px 24px;
-      background: rgba(255,255,255,0.8); border: 1px solid rgba(99,102,241,0.1);
-      border-radius: 12px; font-size: 0.82rem; color: #475569;
+    .card-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; margin-bottom: 14px;
     }
-    .board-info h3 { font-size: 0.9rem; font-weight: 700; color: #6366F1; margin-bottom: 8px; }
-    .board-info code { background: rgba(99,102,241,0.08); padding: 2px 6px; border-radius: 4px; font-size: 0.78rem; }
-    .status-line { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #adb5bd; }
-    .status-dot.ok { background: #059669; }
+    .card-title { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; }
+    .card-desc { font-size: 0.82rem; color: var(--text2); line-height: 1.55; margin-top: 6px; flex: 1; }
+    .card-tags { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+    .tag {
+      padding: 3px 10px; border-radius: 6px;
+      font-size: 0.65rem; font-weight: 600;
+    }
+    .tag-blue { background: rgba(0,122,255,.08); color: var(--blue); }
+    .tag-green { background: rgba(52,199,89,.08); color: var(--green); }
+    .tag-orange { background: rgba(255,149,0,.08); color: var(--orange); }
+    .tag-red { background: rgba(255,59,48,.06); color: var(--red); }
+    .tag-indigo { background: rgba(88,86,214,.08); color: var(--indigo); }
+
+    /* Architecture */
+    .arch {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 20px; padding: 32px;
+      margin-bottom: 48px;
+    }
+    .arch h2 { font-size: 1rem; font-weight: 700; margin-bottom: 16px; }
+    .arch-diagram {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.72rem; line-height: 1.6;
+      color: var(--text2); white-space: pre;
+      overflow-x: auto;
+    }
+    .arch-row {
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 20px;
+    }
+    .arch-item h3 { font-size: 0.72rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+    .arch-item p { font-size: 0.78rem; color: var(--text2); margin-top: 4px; line-height: 1.5; }
+    .arch-item code { background: rgba(0,0,0,.04); padding: 1px 5px; border-radius: 4px; font-size: 0.72rem; }
+
+    /* Footer */
+    .footer { text-align: center; color: var(--text3); font-size: 0.72rem; }
+    .footer a { color: var(--blue); text-decoration: none; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <img src="keti.png" alt="KETI" onerror="this.style.display='none'">
+  <div class="wrap">
+    <!-- Hero -->
+    <div class="hero">
+      <img src="keti.png" alt="KETI" class="hero-logo" onerror="this.style.display='none'">
       <h1>KETI TSN Platform</h1>
-      <p>ILP/Greedy GCL Solver + LAN9662 Board Integration</p>
-    </div>
-
-    <div class="cards">
-      <a href="solver.html" class="card">
-        <h2>GCL Solver</h2>
-        <p>
-          8-TC balanced sensor model with Greedy/ILP solvers.
-          Per-switch GCL visualization, Gantt timeline, delay analysis, and board configuration output.
-          Push solved GCL directly to the LAN9662 board.
-        </p>
-        <span class="badge badge-solver">Greedy + ILP</span>
-        <span class="badge badge-board">Push to Board</span>
-      </a>
-
-      <a href="board.html" class="card">
-        <h2>Board Configuration</h2>
-        <p>
-          Read and visualize the current TAS (IEEE 802.1Qbv) configuration
-          from the physical LAN9662 board. Shows gate control entries,
-          cycle timing, and visual gate timeline per port.
-        </p>
-        <span class="badge badge-board">Live Read</span>
-        <span class="badge badge-cli">keti-tsn CLI</span>
-      </a>
-
-      <a href="dashboard.html" class="card" style="border-color:rgba(99,102,241,0.35);box-shadow:0 4px 20px rgba(99,102,241,0.1);">
-        <h2>Unified Dashboard</h2>
-        <p>
-          3D Topology + GCL Solver + LiDAR Point Cloud in one screen.
-          Real-time board status, solver metrics, and Gantt timeline.
-        </p>
-        <span class="badge badge-solver">All-in-One</span>
-        <span class="badge" style="background:rgba(239,68,68,0.1);color:#ef4444;">Live</span>
-      </a>
-
-      <a href="lidar.html" class="card">
-        <h2>LiDAR Point Cloud</h2>
-        <p>
-          Real-time 3D point cloud visualization from Ouster OS-1-16 LiDAR.
-          UDP → WebSocket streaming with Three.js rendering.
-          Color by height, intensity, or distance.
-        </p>
-        <span class="badge badge-solver">Three.js 3D</span>
-        <span class="badge" style="background:rgba(239,68,68,0.1);color:#ef4444;">Live Stream</span>
-      </a>
-    </div>
-
-    <div class="board-info">
-      <h3>Board Connection</h3>
-      <p>
-        LAN9662 connected via <code>/dev/ttyACM0</code> (serial/MUP1).
-        The server bridges solver output to YANG/CBOR configuration via CoAP iPATCH.
-      </p>
-      <div class="status-line">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Checking...</span>
+      <div class="sub">
+        <strong>IEEE 802.1Qbv</strong> Time-Aware Shaper for <strong>LAN9662</strong><br>
+        Real-time LiDAR traffic analysis + automatic TAS configuration
       </div>
-      <p style="margin-top:8px;">
-        Start: <code>bash run.sh</code> &rarr; <code>http://localhost:3000</code>
-      </p>
+      <div class="status-bar" id="statusBar"></div>
+    </div>
+
+    <!-- Pages -->
+    <div class="pages">
+      <a href="lidar-timing.html" class="page-card featured">
+        <div class="card-icon" style="background:rgba(0,122,255,.08);">&#9201;</div>
+        <div class="card-title">LiDAR Timing Analysis</div>
+        <div class="card-desc">
+          Real-time packet timing from Ouster OS-1-16. Measures frame period, packet interval, jitter in µs precision.
+          Automatically derives optimal TAS cycle and gate schedule from observed traffic. Push to board with one click.
+        </div>
+        <div class="card-tags">
+          <span class="tag tag-blue">Real-time WS</span>
+          <span class="tag tag-green">Auto TAS</span>
+          <span class="tag tag-orange">µs precision</span>
+          <span class="tag tag-red">Live</span>
+        </div>
+      </a>
+
+      <a href="lidar-app.html" class="page-card">
+        <div class="card-icon" style="background:rgba(255,59,48,.06);">&#9888;</div>
+        <div class="card-title">Safety Monitor</div>
+        <div class="card-desc">
+          LiDAR object detection with safety zones. Grid-based clustering, bounding boxes, danger/warning alerts. Frame jitter tracking.
+        </div>
+        <div class="card-tags">
+          <span class="tag tag-red">Detection</span>
+          <span class="tag tag-green">3D</span>
+        </div>
+      </a>
+
+      <a href="dashboard.html" class="page-card">
+        <div class="card-icon" style="background:rgba(88,86,214,.08);">&#9632;</div>
+        <div class="card-title">Dashboard</div>
+        <div class="card-desc">
+          Unified view: 3D topology, GCL solver, LiDAR point cloud, multi-board control, config tables, Gantt timeline.
+        </div>
+        <div class="card-tags">
+          <span class="tag tag-indigo">All-in-One</span>
+          <span class="tag tag-red">Live</span>
+        </div>
+      </a>
+
+      <a href="solver.html" class="page-card">
+        <div class="card-icon" style="background:rgba(88,86,214,.08);">&#128290;</div>
+        <div class="card-title">GCL Solver</div>
+        <div class="card-desc">
+          8-TC balanced sensor model. Greedy + ILP (GLPK WASM) solvers. Per-switch GCL visualization, delay analysis, board push.
+        </div>
+        <div class="card-tags">
+          <span class="tag tag-indigo">ILP</span>
+          <span class="tag tag-blue">Greedy</span>
+        </div>
+      </a>
+
+      <a href="board.html" class="page-card">
+        <div class="card-icon" style="background:rgba(52,199,89,.08);">&#9881;</div>
+        <div class="card-title">Board Config</div>
+        <div class="card-desc">
+          Read/write TAS configuration on LAN9662. Quick profiles, GCL editor, per-port gate timeline. Multi-board selector.
+        </div>
+        <div class="card-tags">
+          <span class="tag tag-green">802.1Qbv</span>
+          <span class="tag tag-orange">CoAP</span>
+        </div>
+      </a>
+
+      <a href="lidar.html" class="page-card">
+        <div class="card-icon" style="background:rgba(50,173,230,.08);">&#11044;</div>
+        <div class="card-title">Point Cloud</div>
+        <div class="card-desc">
+          Raw 3D point cloud from Ouster OS-1-16. Height/intensity/distance color modes. Three.js ES module rendering.
+        </div>
+        <div class="card-tags">
+          <span class="tag tag-blue">Three.js</span>
+          <span class="tag tag-red">Live</span>
+        </div>
+      </a>
+    </div>
+
+    <!-- Architecture -->
+    <div class="arch">
+      <h2>System Architecture</h2>
+      <div class="arch-diagram">  LiDAR (Ouster OS-1-16)         LAN9662 Switch           PC (Node.js Server)
+  ───────────────────         ──────────────           ──────────────────
+  UDP 3392B × 32 pkts   ──▶  Port 2
+  10 fps (100,000 µs)         TAS: TC7 54.9 µs/cycle   Port 1  ◀──  enxc84d44263ba6
+  3,125 µs pkt interval       Cycle: 3,130 µs          UDP :7502 → WS → Browser
+                              CoAP :5683               Express :3000
+                              192.168.1.10             192.168.1.20</div>
+      <div class="arch-row">
+        <div class="arch-item">
+          <h3>Sensing</h3>
+          <p>Ouster OS-1-16 LiDAR, 16 beams, LEGACY format. Traffic profiled in real-time by server.</p>
+        </div>
+        <div class="arch-item">
+          <h3>Switching</h3>
+          <p>Microchip LAN9662 with <code>keti-tsn-cli</code> (CoAP/CBOR over MUP1 or Ethernet). TAS derived from packet timing.</p>
+        </div>
+        <div class="arch-item">
+          <h3>Application</h3>
+          <p>Node.js + Express server. UDP→WS proxy for LiDAR. Multi-board API. Browser-based visualization.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      KETI &middot; TSN Platform &middot;
+      <a href="https://github.com/hwkim3330/ilp202604">GitHub</a> &middot;
+      <code>bash run.sh</code> &rarr; <code>http://localhost:3000</code>
     </div>
   </div>
 
   <script>
     async function checkStatus() {
-      const dot = document.getElementById('statusDot');
-      const text = document.getElementById('statusText');
+      const bar = document.getElementById('statusBar');
       try {
-        const res = await fetch('/api/board/status');
-        const data = await res.json();
-        dot.className = 'status-dot' + (data.connected ? ' ok' : '');
-        text.textContent = data.connected ? `Connected: ${data.device}` : 'Disconnected';
+        const [configRes, lidarRes] = await Promise.all([
+          fetch('/api/boards/status'),
+          fetch('/api/lidar/stats')
+        ]);
+        const boards = await configRes.json();
+        const lidars = await lidarRes.json();
+
+        let html = '';
+        for (const b of boards) {
+          html += `<div class="status-chip">
+            <span class="sdot ${b.connected ? 'sdot-on' : 'sdot-off'}"></span>
+            ${b.id}
+          </div>`;
+        }
+        for (const l of lidars) {
+          const active = l.fps > 0;
+          html += `<div class="status-chip">
+            <span class="sdot ${active ? 'sdot-on' : 'sdot-off'}"></span>
+            ${l.id} ${active ? l.fps + ' fps' : 'off'}
+          </div>`;
+        }
+        bar.innerHTML = html;
       } catch {
-        dot.className = 'status-dot';
-        text.textContent = 'Server offline';
+        bar.innerHTML = '<div class="status-chip"><span class="sdot sdot-off"></span>Server offline</div>';
       }
     }
     checkStatus();
-    setInterval(checkStatus, 5000);
+    setInterval(checkStatus, 8000);
   </script>
 </body>
 </html>
