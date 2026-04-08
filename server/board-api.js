@@ -20,6 +20,7 @@ import { promisify } from 'util';
 import os from 'os';
 import { boardConfigsToYaml, getConfigSummary, gclToYang } from './gcl-to-yang.js';
 import yaml from 'js-yaml';
+import { boards } from './config.js';
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -28,6 +29,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const KETI_TSN = path.resolve(__dirname, '../keti-tsn-cli/bin/keti-tsn.js');
 
 const router = express.Router();
+
+/**
+ * Resolve board host from boardId or query params
+ */
+function resolveBoard(req) {
+  const boardId = req.params.boardId;
+  if (boardId) {
+    const board = boards.find(b => b.id === boardId);
+    if (board) return { transport: 'eth', host: board.host };
+  }
+  // Fallback to query params
+  const transport = req.query.transport || req.body?.transport || 'serial';
+  const host = req.query.host || req.body?.host || null;
+  const device = req.query.device || req.body?.device || '/dev/ttyACM0';
+  return { transport, host, device };
+}
 
 /**
  * Run keti-tsn CLI command
@@ -43,7 +60,7 @@ async function ketiTsn(args, timeout = 30000) {
   });
 }
 
-/* ── GET /api/board/status ── */
+/* ── GET /api/board/status ── (backward compat) */
 router.get('/board/status', async (req, res) => {
   const transport = req.query.transport || 'serial';
   const device = req.query.device || '/dev/ttyACM0';
@@ -54,7 +71,6 @@ router.get('/board/status', async (req, res) => {
     return res.json({ connected, device, transport });
   }
 
-  // Ethernet or WiFi — try keti-tsn checksum to probe
   if (!host) {
     return res.json({ connected: false, transport, error: 'host required for eth/wifi' });
   }
@@ -65,6 +81,102 @@ router.get('/board/status', async (req, res) => {
     res.json({ connected, transport, host, output: stdout.trim() });
   } catch (e) {
     res.json({ connected: false, transport, host, error: e.message });
+  }
+});
+
+/* ── GET /api/board/:boardId/status ── Per-board status by config ID */
+router.get('/board/:boardId/status', async (req, res) => {
+  const board = boards.find(b => b.id === req.params.boardId);
+  if (!board) return res.status(404).json({ error: `Board not found: ${req.params.boardId}` });
+
+  try {
+    const args = ['checksum', '--transport', 'eth', '--host', board.host];
+    const { stdout } = await ketiTsn(args, 5000);
+    const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
+    res.json({ id: board.id, connected, transport: 'eth', host: board.host, label: board.label });
+  } catch (e) {
+    res.json({ id: board.id, connected: false, transport: 'eth', host: board.host, error: e.message });
+  }
+});
+
+/* ── GET /api/boards/status ── All boards status (parallel probe) */
+router.get('/boards/status', async (req, res) => {
+  const results = await Promise.all(boards.map(async (board) => {
+    try {
+      const args = ['checksum', '--transport', 'eth', '--host', board.host];
+      const { stdout } = await ketiTsn(args, 5000);
+      const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
+      return { id: board.id, connected, host: board.host, label: board.label };
+    } catch (e) {
+      return { id: board.id, connected: false, host: board.host, label: board.label, error: e.message };
+    }
+  }));
+  res.json(results);
+});
+
+/* ── GET /api/board/:boardId/gcl ── Read TAS from specific board */
+router.get('/board/:boardId/gcl', async (req, res) => {
+  const board = boards.find(b => b.id === req.params.boardId);
+  if (!board) return res.status(404).json({ error: `Board not found: ${req.params.boardId}` });
+
+  try {
+    const args = ['get', '--transport', 'eth', '--host', board.host];
+    const { stdout } = await ketiTsn(args, 90000);
+
+    const configStart = stdout.indexOf('--- Configuration ---');
+    const configYaml = configStart >= 0 ? stdout.substring(configStart + 22) : stdout;
+    const parsed = yaml.load(configYaml);
+    const interfaces = parsed?.['ietf-interfaces:interfaces']?.interface || [];
+    const ports = {};
+
+    for (const iface of interfaces) {
+      const portName = String(iface.name);
+      const bp = iface['ieee802-dot1q-bridge:bridge-port'];
+      const gpt = bp?.['ieee802-dot1q-sched-bridge:gate-parameter-table'];
+      if (!gpt) continue;
+
+      const mapEntries = (list) => (list?.['gate-control-entry'] || []).map(e => ({
+        index: e.index,
+        gateStates: e['gate-states-value'],
+        timeInterval: e['time-interval-value']
+      }));
+
+      const ethInfo = iface['ieee802-ethernet-interface:ethernet'];
+      const stats = iface.statistics || {};
+
+      ports[portName] = {
+        gateEnabled: gpt['gate-enabled'] ?? false,
+        configPending: gpt['config-pending'] ?? false,
+        adminCycleTime: gpt['admin-cycle-time'],
+        operCycleTime: gpt['oper-cycle-time'],
+        adminEntries: mapEntries(gpt['admin-control-list']),
+        operEntries: mapEntries(gpt['oper-control-list']),
+        supportedListMax: gpt['supported-list-max'],
+        operStatus: iface['oper-status'],
+        macAddress: iface['phys-address'],
+        speed: ethInfo?.speed,
+        rxOctets: stats['in-octets'],
+        txOctets: stats['out-octets']
+      };
+    }
+
+    res.json({ id: board.id, host: board.host, ports });
+  } catch (e) {
+    res.status(500).json({ error: e.stderr || e.message });
+  }
+});
+
+/* ── POST /api/board/:boardId/reboot ── Reboot specific board */
+router.post('/board/:boardId/reboot', async (req, res) => {
+  const board = boards.find(b => b.id === req.params.boardId);
+  if (!board) return res.status(404).json({ error: `Board not found: ${req.params.boardId}` });
+
+  try {
+    const args = ['reboot', '--transport', 'eth', '--host', board.host];
+    const { stdout, stderr } = await ketiTsn(args);
+    res.json({ id: board.id, success: true, output: (stdout + stderr).trim() });
+  } catch (e) {
+    res.status(500).json({ id: board.id, success: false, error: e.stderr || e.message });
   }
 });
 
