@@ -325,19 +325,17 @@
       <img src="keti.png" class="logo" alt="KETI" onerror="this.style.display='none'">
       <h1>KETI TSN Dashboard</h1>
       <span class="spacer"></span>
-      <div class="pill" style="gap:4px;">
-        <select id="transportSel" style="background:transparent;border:none;font-size:0.68rem;font-weight:600;color:inherit;font-family:inherit;cursor:pointer;outline:none;">
-          <option value="serial">Serial</option>
-          <option value="eth">Ethernet</option>
-        </select>
+      <div class="pill" id="boardPillRear">
+        <div class="dot dot-off" id="mbDotTop_SW_REAR"></div>
+        <span>REAR</span>
       </div>
-      <div class="pill" id="hostPill" style="display:none;gap:4px;">
-        <input id="hostInput" type="text" placeholder="192.168.1.10" value="192.168.1.10"
-          style="background:transparent;border:none;font-size:0.68rem;color:inherit;font-family:inherit;width:100px;outline:none;">
+      <div class="pill" id="boardPillFL">
+        <div class="dot dot-off" id="mbDotTop_SW_FL"></div>
+        <span>FL</span>
       </div>
-      <div class="pill">
-        <div class="dot dot-off" id="boardDot"></div>
-        <span id="boardText">Checking board...</span>
+      <div class="pill" id="boardPillFR">
+        <div class="dot dot-off" id="mbDotTop_SW_FR"></div>
+        <span>FR</span>
       </div>
       <div class="pill">
         <div class="dot dot-off" id="lidarDot"></div>
@@ -430,29 +428,7 @@
       </div>
       <div class="bottom-card multiboard">
         <div class="bc-label">Multi-Board Control</div>
-        <div id="multiBoard">
-          <div class="board-row" data-sw="SW_FL">
-            <div class="sw-dot dot-off" id="mbDot_FL"></div>
-            <span class="sw-name">SW_FL</span>
-            <input type="text" id="mbIp_FL" placeholder="192.168.1.11" value="192.168.1.11">
-            <button class="btn-sm" id="mbPush_FL" disabled>Push</button>
-            <span id="mbStatus_FL" style="color:var(--text3)">—</span>
-          </div>
-          <div class="board-row" data-sw="SW_FR">
-            <div class="sw-dot dot-off" id="mbDot_FR"></div>
-            <span class="sw-name">SW_FR</span>
-            <input type="text" id="mbIp_FR" placeholder="192.168.1.12" value="192.168.1.12">
-            <button class="btn-sm" id="mbPush_FR" disabled>Push</button>
-            <span id="mbStatus_FR" style="color:var(--text3)">—</span>
-          </div>
-          <div class="board-row" data-sw="SW_REAR">
-            <div class="sw-dot dot-off" id="mbDot_REAR"></div>
-            <span class="sw-name">SW_REAR</span>
-            <input type="text" id="mbIp_REAR" placeholder="192.168.1.10" value="192.168.1.10">
-            <button class="btn-sm" id="mbPush_REAR" disabled>Push</button>
-            <span id="mbStatus_REAR" style="color:var(--text3)">—</span>
-          </div>
-        </div>
+        <div id="multiBoard"></div>
       </div>
       <div class="bottom-card lidar-tas">
         <div class="bc-label">LiDAR Traffic vs TAS Allocation</div>
@@ -791,11 +767,12 @@
     document.getElementById('lidarRange').textContent = maxRange.toFixed(1)+' m';
   }
 
-  /* ── LiDAR WebSocket ── */
+  /* ── LiDAR WebSocket (config-driven, backward compat /ws/lidar) ── */
   let lidarConnected = false;
   function connectLidar() {
     const proto = location.protocol==='https:'?'wss:':'ws:';
-    const ws = new WebSocket(`${proto}//${location.host}/ws/lidar`);
+    const wsPath = serverConfig.lidars?.[0]?.wsPath || '/ws/lidar';
+    const ws = new WebSocket(`${proto}//${location.host}${wsPath}`);
     ws.binaryType = 'arraybuffer';
     ws.onopen = () => {
       lidarConnected = true;
@@ -844,16 +821,18 @@
   let glpkInstance = null;
   let activeSolver = 'greedy';
 
-  /* ── Transport selection ── */
-  const transportSel = document.getElementById('transportSel');
-  const hostPill = document.getElementById('hostPill');
-  const hostInput = document.getElementById('hostInput');
-  transportSel.addEventListener('change', () => {
-    hostPill.style.display = transportSel.value === 'eth' ? 'flex' : 'none';
-    checkBoard();
-  });
-  function getTransport() { return transportSel.value; }
-  function getHost() { return hostInput.value.trim(); }
+  /* ── Transport: always Ethernet ── */
+  function getTransport() { return 'eth'; }
+  function getHost() { return '192.168.1.10'; }
+
+  /* ── Server config (boards + lidars) ── */
+  let serverConfig = { boards: [], lidars: [] };
+  async function loadConfig() {
+    try {
+      const res = await fetch('/api/config');
+      serverConfig = await res.json();
+    } catch (e) { console.warn('Config load failed:', e); }
+  }
 
   function updateBottomBar(result) {
     if (!result) return;
@@ -917,53 +896,56 @@
     }
   }
 
-  /* ── Read live board TAS and show in bottom panel ── */
+  /* ── Read live board TAS from all connected boards ── */
   async function readBoardTas() {
     const container = document.getElementById('boardLive');
     if (!container) return;
-    try {
-      const transport = getTransport();
-      let url = `/api/gcl/read?transport=${transport}`;
-      if (transport === 'serial') url += '&device=/dev/ttyACM0';
-      else url += `&host=${encodeURIComponent(getHost())}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.error) { container.innerHTML = `<div style="font-size:0.6rem;color:var(--red)">${data.error}</div>`; return; }
+    const TC_COLORS = ['#264653','#2A9D8F','#76B7B2','#457B9D','#D4A574','#E76F51','#E9C46A','#F28E2B'];
+    let html = '';
 
-      let html = '';
-      for (const [portName, pv] of Object.entries(data.ports)) {
-        const enabled = pv.gateEnabled;
-        const ct = pv.adminCycleTime;
-        const cycleUs = ct ? ct.numerator / 1000 : 0;
-        const entries = pv.adminEntries || [];
-        html += `<div style="font-size:0.62rem;margin-bottom:4px;">
-          <strong style="color:var(--accent)">Port ${portName}</strong>
-          <span style="color:${enabled?'var(--green)':'var(--text3)'}">${enabled?'TAS ON':'OFF'}</span>
-          <span style="color:var(--text3)">${cycleUs}µs cycle, ${entries.length} entries</span>
-        </div>`;
-        // Mini gantt for this port
-        if (entries.length > 0 && cycleUs > 0) {
-          html += '<div style="height:10px;background:var(--bg);border-radius:4px;border:1px solid var(--border);position:relative;overflow:hidden;margin-bottom:6px;">';
-          let pos = 0;
-          const TC_COLORS = ['#264653','#2A9D8F','#76B7B2','#457B9D','#D4A574','#E76F51','#E9C46A','#F28E2B'];
-          for (const e of entries) {
-            const dur = e.timeInterval / 1000;
-            const w = dur / cycleUs * 100;
-            const mask = e.gateStates;
-            // Find highest open TC for color
-            let tc = -1;
-            for (let b = 7; b >= 0; b--) { if (mask & (1 << b)) { tc = b; break; } }
-            const color = tc >= 0 ? TC_COLORS[tc] : 'rgba(0,0,0,.03)';
-            html += `<div style="position:absolute;left:${pos}%;width:${Math.max(w,0.3)}%;height:100%;background:${color};opacity:0.8;border-radius:2px;" title="TC${tc} ${dur.toFixed(1)}µs mask=${mask.toString(2).padStart(8,'0')}"></div>`;
-            pos += w;
-          }
-          html += '</div>';
-        }
+    for (const board of serverConfig.boards) {
+      if (!boardStatus[board.id]) {
+        html += `<div style="font-size:0.62rem;margin-bottom:4px;"><strong style="color:var(--text3)">${board.id}</strong> <span style="color:var(--text3)">Offline</span></div>`;
+        continue;
       }
-      container.innerHTML = html || '<div style="font-size:0.6rem;color:var(--text3)">No TAS data</div>';
-    } catch (e) {
-      container.innerHTML = `<div style="font-size:0.6rem;color:var(--text3)">Board read failed</div>`;
+      try {
+        const res = await fetch(`/api/board/${board.id}/gcl`);
+        const data = await res.json();
+        if (data.error) {
+          html += `<div style="font-size:0.6rem;color:var(--red)">${board.id}: ${data.error}</div>`;
+          continue;
+        }
+        for (const [portName, pv] of Object.entries(data.ports)) {
+          const enabled = pv.gateEnabled;
+          const ct = pv.adminCycleTime;
+          const cycleUs = ct ? ct.numerator / 1000 : 0;
+          const entries = pv.adminEntries || [];
+          html += `<div style="font-size:0.62rem;margin-bottom:4px;">
+            <strong style="color:var(--accent)">${board.id} P${portName}</strong>
+            <span style="color:${enabled?'var(--green)':'var(--text3)'}">${enabled?'TAS':'OFF'}</span>
+            <span style="color:var(--text3)">${cycleUs}µs, ${entries.length}ent</span>
+          </div>`;
+          if (entries.length > 0 && cycleUs > 0) {
+            html += '<div style="height:10px;background:var(--bg);border-radius:4px;border:1px solid var(--border);position:relative;overflow:hidden;margin-bottom:6px;">';
+            let pos = 0;
+            for (const e of entries) {
+              const dur = e.timeInterval / 1000;
+              const w = dur / cycleUs * 100;
+              const mask = e.gateStates;
+              let tc = -1;
+              for (let b = 7; b >= 0; b--) { if (mask & (1 << b)) { tc = b; break; } }
+              const color = tc >= 0 ? TC_COLORS[tc] : 'rgba(0,0,0,.03)';
+              html += `<div style="position:absolute;left:${pos}%;width:${Math.max(w,0.3)}%;height:100%;background:${color};opacity:0.8;border-radius:2px;" title="${board.id} P${portName} TC${tc} ${dur.toFixed(1)}µs"></div>`;
+              pos += w;
+            }
+            html += '</div>';
+          }
+        }
+      } catch {
+        html += `<div style="font-size:0.6rem;color:var(--text3)">${board.id}: read failed</div>`;
+      }
     }
+    container.innerHTML = html || '<div style="font-size:0.6rem;color:var(--text3)">No boards</div>';
   }
 
   function renderSolverMetrics(result, wallMs, method) {
@@ -1042,24 +1024,37 @@
     document.getElementById('btnPush').disabled = !currentResult || !boardConnected;
   }
 
+  const boardStatus = {}; // { SW_REAR: true, SW_FL: false, ... }
   async function checkBoard() {
-    const transport = getTransport();
     try {
-      let url = `/api/board/status?transport=${transport}`;
-      if (transport === 'eth') url += `&host=${encodeURIComponent(getHost())}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      boardConnected = data.connected;
-      document.getElementById('boardDot').className = 'dot ' + (data.connected ? 'dot-green' : 'dot-off');
-      if (transport === 'serial') {
-        document.getElementById('boardText').textContent = data.connected ? 'LAN9662 ' + data.device : 'Board offline';
-      } else {
-        document.getElementById('boardText').textContent = data.connected ? 'LAN9662 ' + getHost() : 'Unreachable';
+      const res = await fetch('/api/boards/status');
+      const boards = await res.json();
+      let anyConnected = false;
+      for (const b of boards) {
+        boardStatus[b.id] = b.connected;
+        if (b.connected) anyConnected = true;
+        // Update top bar dots
+        const dot = document.getElementById(`mbDotTop_${b.id}`);
+        if (dot) dot.className = 'dot ' + (b.connected ? 'dot-green' : 'dot-off');
+        // Update multi-board panel dots
+        const mbDot = document.getElementById(`mbDot_${b.id}`);
+        if (mbDot) mbDot.className = 'sw-dot ' + (b.connected ? 'dot-green' : 'dot-off');
+        const mbStatus = document.getElementById(`mbStatus_${b.id}`);
+        if (mbStatus) {
+          mbStatus.textContent = b.connected ? 'Online' : 'Offline';
+          mbStatus.style.color = b.connected ? 'var(--green)' : 'var(--text3)';
+        }
+        const mbPush = document.getElementById(`mbPush_${b.id}`);
+        if (mbPush) mbPush.disabled = !b.connected || !currentResult;
       }
+      boardConnected = anyConnected;
     } catch {
       boardConnected = false;
-      document.getElementById('boardDot').className = 'dot dot-off';
-      document.getElementById('boardText').textContent = 'Server offline';
+      for (const id of ['SW_REAR', 'SW_FL', 'SW_FR']) {
+        boardStatus[id] = false;
+        const dot = document.getElementById(`mbDotTop_${id}`);
+        if (dot) dot.className = 'dot dot-off';
+      }
     }
     updatePushBtn();
   }
@@ -1069,109 +1064,91 @@
     const btn = document.getElementById('btnPush');
     const status = document.getElementById('solverStatus');
     btn.disabled = true; btn.textContent = 'Pushing...';
-    try {
-      const transport = getTransport();
-      const pushBody = {
-        boardConfigs: currentResult.boardConfigs,
-        portMap: { l_swrear_acu: '1', l_swrear_swfl: '2' },
-        transport
-      };
-      if (transport === 'serial') pushBody.device = '/dev/ttyACM0';
-      else pushBody.host = getHost();
-      const res = await fetch('/api/gcl/push', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(pushBody)
-      });
-      const data = await res.json();
-      if (data.error) {
-        status.innerHTML = `<span style="color:var(--red)">${data.error}</span>`;
-      } else {
-        const ok = data.results.filter(r=>r.success).length;
-        status.innerHTML = `<span style="color:var(--green)">${ok} port(s) configured successfully</span>`;
-      }
-    } catch (e) {
-      status.innerHTML = `<span style="color:var(--red)">Push failed: ${e.message}</span>`;
-    }
-    btn.textContent = 'Push to Board';
-    updatePushBtn();
-  });
 
-  /* ═══════════════════════════════════════════════
-     MULTI-BOARD
-     ═══════════════════════════════════════════════ */
-  const MB_SWITCHES = [
-    { key: 'FL', swId: 'SW_FL', label: 'Front-Left ZC' },
-    { key: 'FR', swId: 'SW_FR', label: 'Front-Right ZC' },
-    { key: 'REAR', swId: 'SW_REAR', label: 'Rear Gateway' }
-  ];
-
-  const mbState = { FL: false, FR: false, REAR: false };
-
-  async function checkMultiBoard() {
-    for (const mb of MB_SWITCHES) {
-      const ip = document.getElementById(`mbIp_${mb.key}`).value.trim();
-      if (!ip) continue;
-      try {
-        const res = await fetch(`/api/board/status?transport=eth&host=${encodeURIComponent(ip)}`);
-        const data = await res.json();
-        mbState[mb.key] = data.connected;
-        document.getElementById(`mbDot_${mb.key}`).className = 'sw-dot ' + (data.connected ? 'dot-green' : 'dot-off');
-        document.getElementById(`mbStatus_${mb.key}`).textContent = data.connected ? 'Online' : 'Offline';
-        document.getElementById(`mbStatus_${mb.key}`).style.color = data.connected ? 'var(--green)' : 'var(--text3)';
-        document.getElementById(`mbPush_${mb.key}`).disabled = !data.connected || !currentResult;
-      } catch {
-        mbState[mb.key] = false;
-        document.getElementById(`mbDot_${mb.key}`).className = 'sw-dot dot-off';
-      }
-    }
-  }
-
-  // Per-switch push
-  for (const mb of MB_SWITCHES) {
-    document.getElementById(`mbPush_${mb.key}`).addEventListener('click', async () => {
-      if (!currentResult?.boardConfigs?.[mb.swId]) return;
-      const ip = document.getElementById(`mbIp_${mb.key}`).value.trim();
-      const btn = document.getElementById(`mbPush_${mb.key}`);
-      const status = document.getElementById(`mbStatus_${mb.key}`);
-      btn.disabled = true; btn.textContent = '...';
-
-      // Build port map for this switch
-      const swCfg = currentResult.boardConfigs[mb.swId];
+    // Push to all connected boards via their config IPs
+    const results = [];
+    for (const board of serverConfig.boards) {
+      const swCfg = currentResult.boardConfigs[board.id];
+      if (!swCfg || !boardStatus[board.id]) continue;
       const portLinks = Object.keys(swCfg.ports);
       const portMap = {};
       portLinks.forEach((linkId, i) => { portMap[linkId] = String(i + 1); });
-
       try {
         const res = await fetch('/api/gcl/push', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            boardConfigs: { [mb.swId]: swCfg },
-            portMap,
-            transport: 'eth',
-            host: ip
+            boardConfigs: { [board.id]: swCfg },
+            portMap, transport: 'eth', host: board.host
           })
         });
         const data = await res.json();
-        if (data.error) {
-          status.textContent = 'Err'; status.style.color = 'var(--red)';
-        } else {
-          const ok = data.results.filter(r => r.success).length;
-          status.textContent = `${ok}/${data.results.length} OK`;
-          status.style.color = ok === data.results.length ? 'var(--green)' : 'var(--orange)';
-        }
+        const ok = data.results?.filter(r => r.success).length || 0;
+        results.push({ id: board.id, ok, total: data.results?.length || 0 });
       } catch (e) {
-        status.textContent = 'Fail'; status.style.color = 'var(--red)';
+        results.push({ id: board.id, ok: 0, total: 0, error: e.message });
       }
-      btn.textContent = 'Push';
-      btn.disabled = !mbState[mb.key];
-    });
-  }
+    }
+    const totalOk = results.reduce((s, r) => s + r.ok, 0);
+    const totalPorts = results.reduce((s, r) => s + r.total, 0);
+    const boardsSummary = results.map(r => `${r.id}:${r.ok}/${r.total}`).join(' ');
+    status.innerHTML = totalOk > 0
+      ? `<span style="color:var(--green)">${boardsSummary}</span>`
+      : `<span style="color:var(--red)">Push failed</span>`;
+    btn.textContent = 'Push to Board';
+    updatePushBtn();
+  });
 
-  // Check multi-board every 10s
-  setInterval(checkMultiBoard, 10000);
-  setTimeout(checkMultiBoard, 2000);
+  /* ═══════════════════════════════════════════════
+     MULTI-BOARD (config-driven)
+     ═══════════════════════════════════════════════ */
+  function renderMultiBoardPanel() {
+    const container = document.getElementById('multiBoard');
+    container.innerHTML = '';
+    for (const board of serverConfig.boards) {
+      const row = document.createElement('div');
+      row.className = 'board-row';
+      row.innerHTML = `
+        <div class="sw-dot dot-off" id="mbDot_${board.id}"></div>
+        <span class="sw-name">${board.id}</span>
+        <span style="font-size:0.6rem;color:var(--text3)">${board.host}</span>
+        <span style="flex:1"></span>
+        <button class="btn-sm" id="mbPush_${board.id}" disabled>Push</button>
+        <span id="mbStatus_${board.id}" style="color:var(--text3);font-size:0.6rem;min-width:40px;text-align:right">—</span>
+      `;
+      container.appendChild(row);
+
+      // Per-board push handler
+      row.querySelector(`#mbPush_${board.id}`).addEventListener('click', async () => {
+        if (!currentResult?.boardConfigs?.[board.id]) return;
+        const btn = document.getElementById(`mbPush_${board.id}`);
+        const statusEl = document.getElementById(`mbStatus_${board.id}`);
+        btn.disabled = true; btn.textContent = '...';
+        const swCfg = currentResult.boardConfigs[board.id];
+        const portLinks = Object.keys(swCfg.ports);
+        const portMap = {};
+        portLinks.forEach((linkId, i) => { portMap[linkId] = String(i + 1); });
+        try {
+          const res = await fetch('/api/gcl/push', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              boardConfigs: { [board.id]: swCfg }, portMap,
+              transport: 'eth', host: board.host
+            })
+          });
+          const data = await res.json();
+          const ok = data.results?.filter(r => r.success).length || 0;
+          statusEl.textContent = `${ok}/${data.results?.length || 0}`;
+          statusEl.style.color = ok > 0 ? 'var(--green)' : 'var(--red)';
+        } catch {
+          statusEl.textContent = 'Fail'; statusEl.style.color = 'var(--red)';
+        }
+        btn.textContent = 'Push';
+        btn.disabled = !boardStatus[board.id];
+      });
+    }
+  }
 
   /* ═══════════════════════════════════════════════
      LIDAR TAS LIVE STATS
@@ -1259,17 +1236,17 @@
   /* ═══════════════════════════════════════════════
      BOOT
      ═══════════════════════════════════════════════ */
-  init3D();
-  initLidar();
-  connectLidar();
-  solveAndRender('greedy');
-  checkBoard();
-  setInterval(checkBoard, 5000);
-  // Read live board TAS after a short delay (board read takes ~30s)
-  setTimeout(readBoardTas, 3000);
-
-  // Load GLPK in background
   (async () => {
+    await loadConfig();
+    renderMultiBoardPanel();
+    init3D();
+    initLidar();
+    connectLidar();
+    solveAndRender('greedy');
+    checkBoard();
+    setInterval(checkBoard, 10000);
+    setTimeout(readBoardTas, 5000);
+    // Load GLPK in background
     try {
       const GLPK = (await import('./vendor/glpk.js')).default;
       glpkInstance = await GLPK();
