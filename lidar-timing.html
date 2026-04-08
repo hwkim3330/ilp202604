@@ -212,23 +212,28 @@
           </div>
         </div>
         <div class="spec-group">
-          <div class="spec-title">Measured Timing</div>
+          <div class="spec-title">Measured Timing (real-time)</div>
           <div class="spec-items">
             <div class="spec-item">
               <div class="spec-val" id="xFps">—<span class="unit">Hz</span></div>
               <div class="spec-label">Frame rate</div>
             </div>
             <div class="spec-item">
-              <div class="spec-val" id="xPeriod">—<span class="unit">ms</span></div>
+              <div class="spec-val" id="xPeriod">—<span class="unit">µs</span></div>
               <div class="spec-label">Frame period</div>
+              <div class="spec-sub" id="xPeriodRange"></div>
             </div>
             <div class="spec-item">
-              <div class="spec-val" id="xPktInt">—<span class="unit">ms</span></div>
+              <div class="spec-val" id="xPktInt">—<span class="unit">µs</span></div>
               <div class="spec-label">Packet interval</div>
             </div>
             <div class="spec-item">
               <div class="spec-val" id="xJitter" style="color:var(--green)">—<span class="unit">µs</span></div>
-              <div class="spec-label">Jitter (σ)</div>
+              <div class="spec-label">Frame jitter (σ)</div>
+            </div>
+            <div class="spec-item">
+              <div class="spec-val" id="xPktJitter" style="color:var(--green)">—<span class="unit">µs</span></div>
+              <div class="spec-label">Packet jitter (σ)</div>
             </div>
           </div>
         </div>
@@ -343,12 +348,16 @@
   }
 
   // ── UI ──
+  // Format µs with comma separator for readability
+  function fmtUs(v) { return v >= 10000 ? v.toLocaleString() : v; }
+
   function updateUI() {
     if (!profile) return;
     const p = profile;
     document.getElementById('xFps').innerHTML = `${p.fps}<span class="unit">Hz</span>`;
-    document.getElementById('xPeriod').innerHTML = `${(p.frameIntervalUs/1000).toFixed(1)}<span class="unit">ms</span>`;
-    document.getElementById('xPktInt').innerHTML = `${(p.pktIntervalUs/1000).toFixed(2)}<span class="unit">ms</span>`;
+    document.getElementById('xPeriod').innerHTML = `${fmtUs(p.frameIntervalUs)}<span class="unit">µs</span>`;
+    document.getElementById('xPeriodRange').textContent = `min ${fmtUs(p.frameIntervalMinUs)} / max ${fmtUs(p.frameIntervalMaxUs)} µs`;
+    document.getElementById('xPktInt').innerHTML = `${fmtUs(p.pktIntervalUs)}<span class="unit">µs</span>`;
     const jEl = document.getElementById('xJitter');
     jEl.innerHTML = `${p.jitterUs}<span class="unit">µs</span>`;
     jEl.style.color = p.jitterUs < 500 ? 'var(--green)' : p.jitterUs < 2000 ? 'var(--orange)' : 'var(--red)';
@@ -358,7 +367,13 @@
 
     if (autoTas && !autoTas.error) {
       document.getElementById('xWire').innerHTML = `${autoTas.pktTxUs}<span class="unit">µs</span>`;
-      document.getElementById('xCycle').innerHTML = `${autoTas.cycleUs}<span class="unit">µs</span>`;
+      document.getElementById('xCycle').innerHTML = `${fmtUs(autoTas.cycleUs)}<span class="unit">µs</span>`;
+      const pa = autoTas.packetAnalysis || {};
+      const pjEl = document.getElementById('xPktJitter');
+      if (pjEl) {
+        pjEl.innerHTML = `${pa.pktJitterUs || 0}<span class="unit">µs</span>`;
+        pjEl.style.color = (pa.pktJitterUs || 0) < 300 ? 'var(--green)' : 'var(--orange)';
+      }
       renderTasBar();
       document.getElementById('btnPush').disabled = !document.getElementById('boardSel').value;
     }
@@ -437,7 +452,7 @@
       if(p.newFrame){x.strokeStyle='rgba(50,173,230,.25)';x.lineWidth=0.5;x.beginPath();x.moveTo(px,top);x.lineTo(px,h-bot);x.stroke();}
       const bh=4+int*(h-top-bot-8);x.fillStyle=`rgba(0,122,255,${0.15+int*0.5})`;x.fillRect(px,h-bot-bh,1.5,bh);}
     x.fillStyle='rgba(0,0,0,.2)';x.font='9px Inter';
-    for(let i=0;i<=5;i++)x.fillText(`${i*100}ms`,(i/5)*w+2,h-2);
+    for(let i=0;i<=5;i++)x.fillText(`${i*100},000 µs`,(i/5)*w+2,h-2);
   }
 
   function drawFrame() {
@@ -452,9 +467,10 @@
       const grad=x.createLinearGradient(0,h-bot-bh,0,h-bot);
       grad.addColorStop(0,`rgba(0,122,255,${0.25+int*0.4})`);grad.addColorStop(1,`rgba(88,86,214,${0.1+int*0.2})`);
       x.fillStyle=grad;x.beginPath();x.roundRect(bx,h-bot-bh,barW,bh,2);x.fill();}
-    const dur=(fp[fp.length-1].t-fp[0].t)/1000;
+    const durUs=fp[fp.length-1].t-fp[0].t;
+    const intUs=Math.round(durUs/fp.length);
     x.fillStyle='rgba(0,0,0,.2)';x.font='9px Inter';
-    x.fillText(`${fp.length} pkts | ${dur.toFixed(1)}ms | ${(dur/fp.length).toFixed(2)}ms/pkt`,15,h-2);
+    x.fillText(`${fp.length} pkts | duration ${Math.round(durUs).toLocaleString()} µs | interval ${intUs.toLocaleString()} µs/pkt`,15,h-2);
   }
 
   function drawTas() {
@@ -498,24 +514,24 @@
     if(packets.length<10)return;
     const ints=[];
     for(let i=Math.max(0,packets.length-300);i<packets.length-1;i++)
-      ints.push((packets[i+1].t-packets[i].t)/1000);
+      ints.push(packets[i+1].t-packets[i].t); // µs
     if(ints.length<5)return;
     const top=24,bot=14,maxInt=Math.max(...ints)*1.1,bins=50,binW=maxInt/bins;
     const counts=new Array(bins).fill(0);
     for(const v of ints){const b=Math.min(bins-1,Math.floor(v/binW));counts[b]++;}
     const maxC=Math.max(...counts,1),barW=(w-30)/bins;
-    const expected=profile?profile.pktIntervalUs/1000:3;
+    const expectedUs=profile?profile.pktIntervalUs:3125;
     for(let i=0;i<bins;i++){if(!counts[i])continue;
       const bh=(counts[i]/maxC)*(h-top-bot),bx=15+i*barW;
-      const dist=Math.abs(i*binW-expected)/expected;
+      const dist=Math.abs(i*binW-expectedUs)/expectedUs;
       let color=dist<.1?'rgba(52,199,89,.5)':dist<.5?'rgba(255,204,0,.4)':'rgba(255,59,48,.4)';
       x.fillStyle=color;x.beginPath();x.roundRect(bx,h-bot-bh,Math.max(barW-1,1),bh,1);x.fill();}
-    if(profile){const ex=15+(expected/maxInt)*(w-30);
+    if(profile){const ex=15+(expectedUs/maxInt)*(w-30);
       x.strokeStyle='rgba(0,122,255,.3)';x.lineWidth=1;x.setLineDash([3,3]);
       x.beginPath();x.moveTo(ex,top);x.lineTo(ex,h-bot);x.stroke();x.setLineDash([]);
-      x.fillStyle='rgba(0,122,255,.4)';x.font='8px Inter';x.fillText(`${expected.toFixed(1)}ms expected`,ex+3,top+10);}
+      x.fillStyle='rgba(0,122,255,.4)';x.font='8px Inter';x.fillText(`${expectedUs.toLocaleString()} µs expected`,ex+3,top+10);}
     x.fillStyle='rgba(0,0,0,.15)';x.font='8px Inter';
-    for(let i=0;i<=4;i++)x.fillText(`${(maxInt*i/4).toFixed(1)}ms`,15+(i/4)*(w-30),h-2);
+    for(let i=0;i<=4;i++)x.fillText(`${Math.round(maxInt*i/4).toLocaleString()} µs`,15+(i/4)*(w-30),h-2);
   }
 
   function render(){requestAnimationFrame(render);drawScope();drawFrame();drawTas();drawJitter();}
