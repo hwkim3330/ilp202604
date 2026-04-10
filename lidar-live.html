@@ -8,223 +8,255 @@
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #ffffff; --bg2: #f5f5f7; --bg3: #fafafa;
-      --border: rgba(0,0,0,.06); --border-hi: rgba(0,0,0,.12);
-      --text: #1d1d1f; --text2: #6e6e73; --text3: #aeaeb2;
-      --blue: #007aff; --green: #34c759; --orange: #ff9500; --red: #ff3b30;
-      --cyan: #32ade6; --indigo: #5856d6; --purple: #af52de; --yellow: #ffcc00;
-      --shadow: 0 1px 3px rgba(0,0,0,.04);
+      --bg: #0a0a0f; --bg2: #141419; --bg3: #1c1c24;
+      --card: rgba(255,255,255,.05); --card2: rgba(255,255,255,.08);
+      --border: rgba(255,255,255,.08); --border-hi: rgba(255,255,255,.15);
+      --text: #f5f5f7; --text2: rgba(255,255,255,.55); --text3: rgba(255,255,255,.3);
+      --blue: #0a84ff; --green: #30d158; --orange: #ff9f0a; --red: #ff453a;
+      --cyan: #64d2ff; --indigo: #5e5ce6; --purple: #bf5af2; --yellow: #ffd60a;
     }
     html, body { height: 100%; overflow: hidden; }
-    body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: var(--bg2); color: var(--text); -webkit-font-smoothing: antialiased; }
-    .app { display: grid; grid-template-columns: 1fr 400px; height: 100vh; }
+    body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
 
-    /* ── Left: 3D ── */
-    .canvas-wrap { position: relative; overflow: hidden; background: #0a0a0f; border-right: 1px solid var(--border); }
+    .app { display: grid; grid-template-columns: 1fr 420px; height: 100vh; }
+
+    /* ── Left: 3D canvas ── */
+    .canvas-wrap { position: relative; overflow: hidden; }
     #canvas3d { width: 100%; height: 100%; display: block; }
-    .hud { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; justify-content: space-between; pointer-events: none; z-index: 5; }
-    .hud > * { pointer-events: auto; }
-    .hud-title { font-size: 0.88rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
-    .hud-sub { font-size: 0.62rem; color: rgba(255,255,255,.5); margin-top: 2px; }
-    .pills { display: flex; gap: 4px; }
-    .pill { display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,.08); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,.1); padding: 4px 10px; border-radius: 100px; font-size: 0.6rem; font-weight: 600; color: #fff; }
-    .dot { width: 5px; height: 5px; border-radius: 50%; }
-    .dot-on { background: #30d158; box-shadow: 0 0 6px #30d158; }
-    .dot-off { background: rgba(255,255,255,.3); }
-    .hud-bottom { position: absolute; bottom: 12px; left: 16px; right: 16px; display: flex; justify-content: space-between; pointer-events: none; z-index: 5; }
+
+    /* 3D HUD overlay */
+    .hud-top { position: absolute; top: 16px; left: 20px; right: 20px; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; z-index: 5; }
+    .hud-top > * { pointer-events: auto; }
+    .hud-title { font-size: 1.1rem; font-weight: 800; letter-spacing: -0.02em; }
+    .hud-sub { font-size: 0.68rem; color: var(--text2); margin-top: 2px; }
+    .pills { display: flex; gap: 6px; }
+    .pill { display: flex; align-items: center; gap: 5px; background: var(--card); backdrop-filter: blur(20px); border: 1px solid var(--border); padding: 5px 12px; border-radius: 100px; font-size: 0.65rem; font-weight: 500; }
+    .dot { width: 6px; height: 6px; border-radius: 50%; }
+    .dot-on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot-off { background: var(--text3); }
+    .pill .v { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+    .hud-bottom { position: absolute; bottom: 16px; left: 20px; right: 20px; display: flex; justify-content: space-between; align-items: flex-end; pointer-events: none; z-index: 5; }
     .hud-bottom > * { pointer-events: auto; }
-    .cbtn { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.1); color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.58rem; font-weight: 600; cursor: pointer; font-family: inherit; }
-    .cbtn:hover { background: rgba(255,255,255,.15); }
-    .legend { display: flex; gap: 3px; align-items: center; font-size: 0.55rem; color: rgba(255,255,255,.3); }
-    .legend-bar { width: 80px; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000); }
+    .legend { display: flex; gap: 4px; align-items: center; font-size: 0.6rem; color: var(--text3); }
+    .legend-bar { width: 100px; height: 6px; border-radius: 3px; background: linear-gradient(90deg, #0000ff, #00ffff, #00ff00, #ffff00, #ff0000); }
+    .ctrl-btns { display: flex; gap: 4px; }
+    .cbtn { background: var(--card); backdrop-filter: blur(20px); border: 1px solid var(--border); color: var(--text); padding: 5px 12px; border-radius: 8px; font-size: 0.62rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: all .15s; }
+    .cbtn:hover { background: var(--card2); }
 
-    /* ── Right panel ── */
-    .panel { display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+    /* ── Right: Panel ── */
+    .panel { display: flex; flex-direction: column; background: var(--bg2); border-left: 1px solid var(--border); overflow: hidden; }
 
-    /* Nav */
-    .pnav { display: flex; align-items: center; padding: 0 16px; height: 40px; border-bottom: 1px solid var(--border); gap: 4px; }
-    .pnav a { font-size: 0.6rem; font-weight: 600; color: var(--text3); text-decoration: none; padding: 4px 10px; border-radius: 6px; }
-    .pnav a:hover { color: var(--text2); background: var(--bg2); }
-    .pnav a.active { color: var(--blue); background: rgba(0,122,255,.06); }
-    .pnav-spacer { flex: 1; }
-    .pnav-status { font-size: 0.55rem; color: var(--text3); display: flex; align-items: center; gap: 4px; }
-    .sdot { width: 5px; height: 5px; border-radius: 50%; background: var(--text3); }
-    .sdot.on { background: var(--green); box-shadow: 0 0 4px rgba(52,199,89,.4); }
+    .panel-nav { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); gap: 8px; }
+    .panel-nav a { font-size: 0.62rem; font-weight: 600; color: var(--text3); text-decoration: none; padding: 4px 10px; border-radius: 6px; }
+    .panel-nav a:hover { color: var(--text2); background: var(--card); }
+    .panel-nav a.active { color: var(--blue); background: rgba(10,132,255,.12); }
+    .panel-spacer { flex: 1; }
+    .panel-status { font-size: 0.6rem; color: var(--text3); display: flex; align-items: center; gap: 5px; }
 
-    /* Topology */
-    .topo-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
-    .topo-svg { width: 100%; }
-    .sec-title { font-size: 0.52rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text3); margin-bottom: 8px; }
+    /* ── Stats strip ── */
+    .stats-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+    .stat-card { background: var(--bg2); padding: 10px 12px; text-align: center; }
+    .stat-val { font-size: 1.2rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+    .stat-label { font-size: 0.48rem; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+    .stat-unit { font-size: 0.55rem; font-weight: 500; color: var(--text3); }
 
-    /* Stats */
-    .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
-    .st { background: var(--bg); padding: 8px 6px; text-align: center; }
-    .st-val { font-size: 1rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
-    .st-label { font-size: 0.42rem; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 1px; }
+    /* ── Timing canvases ── */
+    .timing-canvases { display: grid; grid-template-rows: 1fr 1fr; gap: 1px; background: var(--border); flex: 1; min-height: 0; }
+    .tc-cell { background: var(--bg2); position: relative; overflow: hidden; }
+    .tc-cell canvas { width: 100%; height: 100%; display: block; }
+    .tc-label { position: absolute; top: 6px; left: 10px; font-size: 0.5rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
 
-    /* Canvas */
-    .scope-wrap { height: 90px; border-bottom: 1px solid var(--border); position: relative; background: var(--bg); }
-    .scope-wrap canvas { width: 100%; height: 100%; display: block; }
-    .scope-label { position: absolute; top: 4px; left: 8px; font-size: 0.48rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; }
+    /* ── GCL bar ── */
+    .gcl-bar { border-top: 1px solid var(--border); padding: 10px 16px; }
+    .gcl-gantt { width: 100%; height: 32px; border-radius: 8px; overflow: hidden; display: flex; background: var(--bg3); }
+    .gcl-seg { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.5rem; font-weight: 700; overflow: hidden; }
+    .gcl-meta { display: flex; gap: 12px; margin-top: 6px; font-size: 0.55rem; color: var(--text3); }
+    .gcl-meta strong { color: var(--text2); }
 
-    /* GCL Editor */
-    .gcl-section { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
-    .gcl-head { display: flex; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--border); gap: 6px; }
-    .gcl-head h3 { font-size: 0.65rem; font-weight: 700; flex: 1; }
-    .mode-tog { display: flex; border-radius: 6px; border: 1px solid var(--border); overflow: hidden; }
-    .mode-b { padding: 3px 10px; font-size: 0.55rem; font-weight: 600; border: none; background: var(--bg2); color: var(--text3); cursor: pointer; font-family: inherit; }
-    .mode-b.on { background: var(--blue); color: #fff; }
+    /* ── Bottom actions ── */
+    .actions-bar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
+    .act-sel { padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.62rem; font-family: inherit; background: var(--bg3); color: var(--text2); cursor: pointer; }
+    .act-btn { padding: 6px 14px; border-radius: 8px; border: none; font-size: 0.62rem; font-weight: 700; cursor: pointer; font-family: inherit; transition: all .15s; }
+    .act-primary { background: var(--blue); color: #fff; }
+    .act-primary:hover { filter: brightness(1.15); }
+    .act-primary:disabled { opacity: .3; cursor: not-allowed; }
+    .act-secondary { background: var(--card2); color: var(--text2); border: 1px solid var(--border); }
+    .act-secondary:hover { border-color: var(--blue); color: var(--blue); }
+    .act-spacer { flex: 1; }
+    .bench-strip { display: flex; gap: 3px; }
+    .bench-item { padding: 2px 8px; background: var(--card); border-radius: 4px; text-align: center; }
+    .bench-val { font-size: 0.65rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .bench-lbl { font-size: 0.42rem; color: var(--text3); }
 
-    .gcl-ctrls { padding: 8px 16px; border-bottom: 1px solid var(--border); }
-    .cr { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-    .cr:last-child { margin-bottom: 0; }
-    .cr-l { font-size: 0.55rem; font-weight: 600; color: var(--text3); width: 48px; }
-    .cr-in { width: 70px; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--border); font-size: 0.65rem; font-family: inherit; font-weight: 600; text-align: right; }
-    .cr-sl { flex: 1; height: 3px; -webkit-appearance: none; background: var(--bg2); border-radius: 2px; }
-    .cr-sl::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--blue); cursor: pointer; }
-    .cr-v { font-size: 0.6rem; font-weight: 700; width: 40px; text-align: right; }
-    .cr-u { font-size: 0.48rem; color: var(--text3); }
+    /* ── GCL section ── */
+    .gcl-section { border-top: 1px solid var(--border); overflow-y: auto; max-height: 240px; }
+    .gcl-block { padding: 8px 16px; }
+    .gcl-block + .gcl-block { border-top: 1px solid var(--border); }
+    .gcl-title { font-size: 0.55rem; font-weight: 700; color: var(--text2); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+    .gcl-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .gcl-entries { border-top: 1px solid var(--border); padding: 8px 16px; }
+    .gcl-entry-table { width: 100%; border-collapse: collapse; font-size: 0.58rem; }
+    .gcl-entry-table th { text-align: left; padding: 3px 6px; font-size: 0.48rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+    .gcl-entry-table td { padding: 3px 6px; border-bottom: 1px solid rgba(255,255,255,.04); font-variant-numeric: tabular-nums; }
+    .gate-bits-sm { display: inline-flex; gap: 1px; }
+    .gbit { width: 12px; height: 12px; border-radius: 2px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.4rem; font-weight: 700; }
+    .gbit.on { color: #fff; }
+    .gbit.off { background: rgba(255,255,255,.06); color: var(--text3); }
 
-    /* GCL table */
-    .gcl-tw { flex: 1; overflow-y: auto; }
-    .gt { width: 100%; border-collapse: collapse; font-size: 0.6rem; }
-    .gt th { text-align: left; padding: 4px 6px; font-size: 0.45rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text3); border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 1; }
-    .gt td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
-    .gbits { display: inline-flex; gap: 1px; }
-    .gb { width: 16px; height: 16px; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.42rem; font-weight: 700; }
-    .gb.on { color: #fff; }
-    .gb.off { background: var(--bg2); color: var(--text3); }
-    .gb.clk { cursor: pointer; }
-    .gb.clk:hover { opacity: .8; transform: scale(1.1); }
-    .dur-in { width: 64px; padding: 2px 5px; border-radius: 4px; border: 1px solid var(--border); font-size: 0.62rem; font-family: inherit; font-weight: 600; text-align: right; }
-    .btn-x { width: 18px; height: 18px; border-radius: 4px; border: none; background: none; color: var(--text3); cursor: pointer; font-size: 0.65rem; }
-    .btn-x:hover { background: rgba(255,59,48,.08); color: var(--red); }
-    .btn-add { width: 100%; padding: 4px; border: 1px dashed var(--border); border-radius: 6px; background: none; font-size: 0.55rem; font-weight: 600; color: var(--text3); cursor: pointer; font-family: inherit; margin: 6px 0; }
-    .btn-add:hover { border-color: var(--blue); color: var(--blue); }
+    /* ── Topology bar ── */
+    .topo-bar { display: flex; align-items: center; gap: 0; padding: 8px 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+    .topo-node { display: flex; flex-direction: column; align-items: center; padding: 6px 12px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); min-width: 70px; }
+    .topo-node.active { border-color: var(--green); background: rgba(48,209,88,.06); }
+    .topo-name { font-size: 0.6rem; font-weight: 800; }
+    .topo-ip { font-size: 0.48rem; color: var(--text3); font-variant-numeric: tabular-nums; margin-top: 1px; }
+    .topo-dot { width: 5px; height: 5px; border-radius: 50%; margin-top: 3px; }
+    .topo-arrow { font-size: 0.7rem; color: var(--text3); margin: 0 4px; flex-shrink: 0; }
 
-    /* Gantt */
-    .gantt-w { padding: 6px 16px 8px; border-top: 1px solid var(--border); }
-    .gantt-bar { width: 100%; height: 28px; border-radius: 8px; overflow: hidden; display: flex; background: var(--bg2); border: 1px solid var(--border); }
-    .g-seg { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.45rem; font-weight: 700; overflow: hidden; }
-    .gantt-info { font-size: 0.52rem; color: var(--text3); margin-top: 4px; text-align: center; }
-    .gantt-info strong { color: var(--text2); }
-    .gantt-warn { color: var(--red); font-weight: 600; }
+    /* ── GCL custom edit ── */
+    .gcl-edit-section { border-top: 1px solid var(--border); }
+    .gcl-edit-head { display: flex; align-items: center; padding: 6px 16px; border-bottom: 1px solid var(--border); gap: 6px; }
+    .gcl-edit-head h4 { font-size: 0.58rem; font-weight: 700; flex: 1; color: var(--text2); }
+    .mode-pill { display: flex; border-radius: 6px; border: 1px solid var(--border); overflow: hidden; }
+    .mode-pb { padding: 3px 10px; font-size: 0.5rem; font-weight: 700; border: none; background: var(--bg3); color: var(--text3); cursor: pointer; font-family: inherit; }
+    .mode-pb.on { background: var(--blue); color: #fff; }
+    .gcl-ctrl-row { display: flex; align-items: center; gap: 6px; padding: 4px 16px; }
+    .gcl-ctrl-label { font-size: 0.5rem; font-weight: 600; color: var(--text3); width: 42px; }
+    .gcl-ctrl-in { width: 60px; padding: 2px 5px; border-radius: 4px; border: 1px solid var(--border); font-size: 0.6rem; font-family: inherit; font-weight: 600; text-align: right; background: var(--bg3); color: var(--text); }
+    .gcl-ctrl-sl { flex: 1; height: 3px; -webkit-appearance: none; background: var(--bg3); border-radius: 2px; }
+    .gcl-ctrl-sl::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; border-radius: 50%; background: var(--blue); cursor: pointer; }
+    .gcl-ctrl-val { font-size: 0.55rem; font-weight: 700; width: 36px; text-align: right; color: var(--text2); }
+    .edit-table { width: 100%; border-collapse: collapse; font-size: 0.55rem; }
+    .edit-table th { text-align: left; padding: 3px 6px; font-size: 0.42rem; font-weight: 700; color: var(--text3); text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    .edit-table td { padding: 3px 6px; border-bottom: 1px solid rgba(255,255,255,.04); }
+    .ebit { width: 14px; height: 14px; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.38rem; font-weight: 700; }
+    .ebit.on { color: #fff; }
+    .ebit.off { background: rgba(255,255,255,.06); color: var(--text3); }
+    .ebit.clk { cursor: pointer; }
+    .ebit.clk:hover { opacity: .75; }
+    .edur { width: 56px; padding: 2px 4px; border-radius: 3px; border: 1px solid var(--border); font-size: 0.55rem; font-family: inherit; font-weight: 600; text-align: right; background: var(--bg3); color: var(--text); }
+    .ebtn-x { border: none; background: none; color: var(--text3); cursor: pointer; font-size: 0.6rem; padding: 0 2px; }
+    .ebtn-x:hover { color: var(--red); }
+    .ebtn-add { width: 100%; padding: 3px; border: 1px dashed var(--border); border-radius: 5px; background: none; font-size: 0.48rem; font-weight: 600; color: var(--text3); cursor: pointer; font-family: inherit; margin: 4px 0; }
+    .ebtn-add:hover { border-color: var(--blue); color: var(--blue); }
+    .gantt-mini { width: 100%; height: 22px; border-radius: 6px; overflow: hidden; display: flex; background: var(--bg3); margin-top: 4px; }
+    .gm-seg { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 0.4rem; font-weight: 700; overflow: hidden; }
+    .gantt-note { font-size: 0.48rem; color: var(--text3); margin-top: 3px; padding: 0 16px; }
+    .gantt-warn { color: var(--red); }
 
-    /* Bottom */
-    .bot-bar { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-top: 1px solid var(--border); background: var(--bg); }
-    .b-sel { padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); font-size: 0.58rem; font-family: inherit; background: var(--bg2); color: var(--text2); cursor: pointer; }
-    .b-btn { padding: 5px 14px; border-radius: 8px; border: none; font-size: 0.58rem; font-weight: 700; cursor: pointer; font-family: inherit; }
-    .b-primary { background: var(--blue); color: #fff; }
-    .b-primary:disabled { opacity: .3; cursor: not-allowed; }
-    .b-sec { background: var(--bg2); color: var(--text2); border: 1px solid var(--border); }
-    .b-sec:hover { border-color: var(--blue); color: var(--blue); }
-    .b-spacer { flex: 1; }
-    .bench { display: flex; gap: 2px; }
-    .bench-i { padding: 2px 8px; background: var(--bg2); border-radius: 4px; text-align: center; }
-    .bench-v { font-size: 0.62rem; font-weight: 800; }
-    .bench-l { font-size: 0.4rem; color: var(--text3); }
-
-    .toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 10px; font-size: 0.68rem; font-weight: 600; z-index: 999; animation: tin .3s; }
-    .toast-ok { background: var(--green); color: #fff; }
+    /* Toast */
+    .toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); padding: 10px 24px; border-radius: 12px; font-size: 0.72rem; font-weight: 600; z-index: 999; animation: toastIn .3s; }
+    .toast-ok { background: var(--green); color: #000; }
     .toast-err { background: var(--red); color: #fff; }
-    @keyframes tin { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
+    @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(10px); } }
   </style>
 </head>
 <body>
 <div class="app">
+  <!-- Left: 3D Point Cloud -->
   <div class="canvas-wrap">
     <canvas id="canvas3d"></canvas>
-    <div class="hud">
-      <div><div class="hud-title">Ouster OS-1-16</div><div class="hud-sub">Live Point Cloud — <span id="modeText">512×10</span></div></div>
+    <div class="hud-top">
+      <div>
+        <div class="hud-title">Ouster OS-1-16</div>
+        <div class="hud-sub">Live Point Cloud + Timing — <span id="modeText">512×10</span></div>
+      </div>
       <div class="pills">
-        <div class="pill"><div class="dot" id="cloudDot"></div><span id="cloudSt">—</span></div>
-        <div class="pill"><span style="opacity:.5">FPS</span><span id="fpsVal">0</span></div>
-        <div class="pill"><span style="opacity:.5">Pts</span><span id="ptsVal">0</span></div>
+        <div class="pill"><div class="dot" id="cloudDot"></div><span id="cloudStatus">—</span></div>
+        <div class="pill"><span style="color:var(--text3)">FPS</span><span class="v" id="fpsVal">0</span></div>
+        <div class="pill"><span style="color:var(--text3)">Pts</span><span class="v" id="ptsVal">0</span></div>
       </div>
     </div>
     <div class="hud-bottom">
       <div class="legend"><span>Near</span><div class="legend-bar"></div><span>Far</span></div>
-      <div style="display:flex;gap:3px">
-        <button class="cbtn" onclick="cycleColor()"><span id="colorLbl">Height</span></button>
-        <button class="cbtn" onclick="cycleSize()">Size</button>
+      <div class="ctrl-btns">
+        <button class="cbtn" onclick="cycleColor()">Color: <span id="colorLabel">Height</span></button>
+        <button class="cbtn" onclick="cycleSize()">Size: <span id="sizeLabel">2</span></button>
         <button class="cbtn" onclick="toggleGrid()">Grid</button>
         <button class="cbtn" onclick="resetView()">Reset</button>
       </div>
     </div>
   </div>
 
+  <!-- Right: Timing Panel -->
   <div class="panel">
-    <div class="pnav">
+    <div class="panel-nav">
       <a href="/" class="nav-link">Home</a>
       <a href="lidar-timing.html">Editor</a>
       <a href="board.html">Board</a>
       <a href="how-it-works.html">Docs</a>
-      <span class="pnav-spacer"></span>
-      <div class="pnav-status"><span class="sdot" id="timDot"></span><span id="timSt">—</span></div>
+      <span class="panel-spacer"></span>
+      <div class="panel-status"><div class="dot" id="timingDot"></div><span id="timingStatus">—</span></div>
     </div>
 
     <!-- Topology -->
-    <div class="topo-section">
-      <div class="sec-title">Network Topology</div>
-      <svg class="topo-svg" viewBox="0 0 370 70" id="topoSvg"></svg>
-    </div>
+    <div class="topo-bar" id="topoBar"></div>
 
     <!-- Stats -->
-    <div class="stats">
-      <div class="st"><div class="st-val" id="sFps">—</div><div class="st-label">FPS</div></div>
-      <div class="st"><div class="st-val" id="sPkt">—</div><div class="st-label">Pkt int µs</div></div>
-      <div class="st"><div class="st-val" id="sJit">—</div><div class="st-label">Jitter µs</div></div>
-      <div class="st"><div class="st-val" id="sBw">—</div><div class="st-label">Mbps</div></div>
-      <div class="st"><div class="st-val" id="sWire">—</div><div class="st-label">Wire µs</div></div>
+    <div class="stats-strip">
+      <div class="stat-card"><div class="stat-val" id="sFps">—</div><div class="stat-label">Frame Rate</div></div>
+      <div class="stat-card"><div class="stat-val" id="sPktInt">—</div><div class="stat-label">Pkt Interval <span class="stat-unit">µs</span></div></div>
+      <div class="stat-card"><div class="stat-val" id="sJitter">—</div><div class="stat-label">Jitter σ <span class="stat-unit">µs</span></div></div>
+      <div class="stat-card"><div class="stat-val" id="sBw">—</div><div class="stat-label">Bandwidth <span class="stat-unit">Mbps</span></div></div>
     </div>
 
-    <!-- Scope -->
-    <div class="scope-wrap">
-      <div class="scope-label">Packet Arrivals — 500 ms</div>
-      <canvas id="cScope"></canvas>
+    <!-- Timing canvases -->
+    <div class="timing-canvases">
+      <div class="tc-cell">
+        <div class="tc-label">Packet Arrivals — 500 ms</div>
+        <canvas id="cScope"></canvas>
+      </div>
+      <div class="tc-cell">
+        <div class="tc-label">Packet Interval Distribution</div>
+        <canvas id="cJitter"></canvas>
+      </div>
     </div>
 
     <!-- GCL Editor -->
-    <div class="gcl-section">
-      <div class="gcl-head">
-        <h3>GCL Schedule</h3>
-        <div class="mode-tog">
-          <button class="mode-b on" id="mAuto" onclick="setMode('auto')">Auto</button>
-          <button class="mode-b" id="mCust" onclick="setMode('custom')">Custom</button>
+    <div class="gcl-edit-section" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;min-height:0;">
+      <div class="gcl-edit-head">
+        <h4>GCL Schedule</h4>
+        <div class="mode-pill">
+          <button class="mode-pb on" id="mAuto" onclick="setMode('auto')">Auto</button>
+          <button class="mode-pb" id="mCust" onclick="setMode('custom')">Custom</button>
         </div>
       </div>
-      <div class="gcl-ctrls">
-        <div class="cr">
-          <span class="cr-l">Cycle</span>
-          <input type="number" class="cr-in" id="cCycle" value="3130" onchange="editCycle(+this.value)">
-          <span class="cr-u">µs</span>
-          <input type="range" class="cr-sl" id="cCycleSl" min="100" max="10000" value="3130" oninput="editCycle(+this.value)">
+      <div style="padding:6px 0;">
+        <div class="gcl-ctrl-row">
+          <span class="gcl-ctrl-label">Cycle</span>
+          <input type="number" class="gcl-ctrl-in" id="eCycle" value="3130" onchange="eCycleChg(+this.value)">
+          <span style="font-size:0.45rem;color:var(--text3)">µs</span>
+          <input type="range" class="gcl-ctrl-sl" id="eCycleSl" min="100" max="10000" value="3130" oninput="eCycleChg(+this.value)">
         </div>
-        <div class="cr">
-          <span class="cr-l">Margin</span>
-          <input type="range" class="cr-sl" id="cMargin" min="10" max="50" value="20" oninput="editMargin(+this.value/10)">
-          <span class="cr-v" id="cMarginV">2.0<span class="cr-u">×</span></span>
+        <div class="gcl-ctrl-row">
+          <span class="gcl-ctrl-label">Margin</span>
+          <input type="range" class="gcl-ctrl-sl" id="eMargin" min="10" max="50" value="20" oninput="eMarginChg(+this.value/10)">
+          <span class="gcl-ctrl-val" id="eMarginV">2.0×</span>
         </div>
       </div>
-      <div class="gcl-tw">
-        <table class="gt"><thead><tr><th>#</th><th>Gate</th><th>TCs</th><th>Duration</th><th></th></tr></thead><tbody id="gBody"></tbody></table>
-        <div style="padding:0 6px"><button class="btn-add" onclick="addEntry()">+ Add Entry</button></div>
+      <div style="flex:1;overflow-y:auto;">
+        <table class="edit-table"><thead><tr><th>#</th><th>Gate</th><th>TCs</th><th>Duration</th><th></th></tr></thead><tbody id="eBody"></tbody></table>
+        <div style="padding:0 6px"><button class="ebtn-add" onclick="eAdd()">+ Add</button></div>
       </div>
-      <div class="gantt-w">
-        <div class="gantt-bar" id="ganttBar"></div>
-        <div class="gantt-info" id="ganttInfo"></div>
+      <div style="padding:6px 16px;border-top:1px solid var(--border);">
+        <div class="gantt-mini" id="eGantt"></div>
+        <div class="gantt-note" id="eGanttNote"></div>
       </div>
     </div>
 
-    <!-- Bottom -->
-    <div class="bot-bar">
-      <select class="b-sel" id="boardSel"><option value="">Board</option></select>
-      <select class="b-sel" id="portSel"><option value="1">P1</option><option value="2">P2</option><option value="both">Both</option></select>
-      <button class="b-btn b-primary" id="btnPush" disabled onclick="pushTas()">Push TAS</button>
-      <button class="b-btn b-sec" onclick="runBenchmark()">Bench</button>
-      <button class="b-btn b-sec" onclick="captureSnapshot()">Save</button>
-      <span class="b-spacer"></span>
-      <div class="bench" id="benchStrip"></div>
+    <!-- Actions -->
+    <div class="actions-bar">
+      <select class="act-sel" id="boardSel"><option value="">Board —</option></select>
+      <select class="act-sel" id="portSel">
+        <option value="1">Port 1</option>
+        <option value="2">Port 2</option>
+        <option value="both">Both</option>
+      </select>
+      <button class="act-btn act-primary" id="btnPush" disabled onclick="pushTas()">Push TAS</button>
+      <button class="act-btn act-secondary" onclick="runBenchmark()">Bench</button>
+      <button class="act-btn act-secondary" onclick="captureSnapshot()">Save</button>
+      <span class="act-spacer"></span>
+      <div class="bench-strip" id="benchStrip"></div>
     </div>
   </div>
 </div>
@@ -236,280 +268,357 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/* ══════════════════════
-   State
-   ══════════════════════ */
-const TC = [{n:'TC0',c:'#8e8e93'},{n:'TC1',c:'#ff3b30'},{n:'TC2',c:'#34c759'},{n:'TC3',c:'#ff9500'},{n:'TC4',c:'#af52de'},{n:'TC5',c:'#5856d6'},{n:'TC6',c:'#32ade6'},{n:'TC7',c:'#007aff'}];
-let config = { boards: [], lidars: [] }, selectedLidar = null;
+/* ══════════════════════════════════════════
+   Config & State
+   ══════════════════════════════════════════ */
+let config = { boards: [], lidars: [] };
+let selectedLidar = null;
 let profile = null, autoTas = null;
-const tPkts = []; const MAX_T = 2000;
-let editor = { mode: 'auto', cycleUs: 3130, margin: 2.0, entries: [] };
+const timingPkts = [];
+const MAX_TIMING = 2000;
 
-/* ══════════════════════
-   Three.js
-   ══════════════════════ */
-const canvas = document.getElementById('canvas3d'), wrap = canvas.parentElement;
+/* ══════════════════════════════════════════
+   Three.js — Point Cloud
+   ══════════════════════════════════════════ */
+const canvas = document.getElementById('canvas3d');
+const wrap = canvas.parentElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setClearColor(0x0a0a0f);
-const scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0a0a0f, 30, 80);
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x0a0a0f, 30, 80);
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
 camera.position.set(0, 8, 15);
-const ctrl = new OrbitControls(camera, canvas); ctrl.enableDamping = true; ctrl.dampingFactor = 0.08;
-const grid = new THREE.GridHelper(40, 40, 0x222233, 0x151520); scene.add(grid);
-const ax = new THREE.AxesHelper(2); scene.add(ax);
-const MP = 16384, geo = new THREE.BufferGeometry();
-const posA = new Float32Array(MP*3), colA = new Float32Array(MP*3);
-geo.setAttribute('position', new THREE.BufferAttribute(posA, 3));
-geo.setAttribute('color', new THREE.BufferAttribute(colA, 3));
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.maxDistance = 80; controls.minDistance = 1;
+
+const gridHelper = new THREE.GridHelper(40, 40, 0x222233, 0x151520);
+scene.add(gridHelper);
+const axes = new THREE.AxesHelper(2); scene.add(axes);
+
+const MAX_PTS = 16384;
+const geo = new THREE.BufferGeometry();
+const pos = new Float32Array(MAX_PTS * 3);
+const col = new Float32Array(MAX_PTS * 3);
+geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 geo.setDrawRange(0, 0);
 const mat = new THREE.PointsMaterial({ size: 0.08, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.85 });
 scene.add(new THREE.Points(geo, mat));
-let colorMode = 0; const cmNames = ['Height','Intensity','Distance'];
-let sizeIdx = 1; const sizes = [0.04, 0.08, 0.15, 0.25];
-let fc = 0, lfps = performance.now(), dfps = 0;
 
-function cFn(x,y,z,int) {
-  if (colorMode===0) { const t=Math.max(0,Math.min(1,(z+3)/8)); return t<.25?[0,t*4,1]:t<.5?[0,1,1-(t-.25)*4]:t<.75?[(t-.5)*4,1,0]:[1,1-(t-.75)*4,0]; }
-  if (colorMode===1) { const t=Math.min(1,int/1000); return [t,t*.8,t*.3]; }
-  const d=Math.sqrt(x*x+y*y+z*z),t=Math.max(0,Math.min(1,d/30)); return t<.25?[0,t*4,1]:t<.5?[0,1,1-(t-.25)*4]:t<.75?[(t-.5)*4,1,0]:[1,1-(t-.75)*4,0];
+let colorMode = 0;
+const colorModes = ['Height', 'Intensity', 'Distance'];
+let sizeIdx = 1;
+const sizes = [0.04, 0.08, 0.15, 0.25];
+let frameCount = 0, lastFpsTime = performance.now(), displayFps = 0;
+
+function colorFn(x, y, z, intensity) {
+  if (colorMode === 0) { const t = Math.max(0, Math.min(1, (z + 3) / 8)); return t < .25 ? [0, t*4, 1] : t < .5 ? [0, 1, 1-(t-.25)*4] : t < .75 ? [(t-.5)*4, 1, 0] : [1, 1-(t-.75)*4, 0]; }
+  if (colorMode === 1) { const t = Math.min(1, intensity / 1000); return [t, t*.8, t*.3]; }
+  const d = Math.sqrt(x*x+y*y+z*z), t = Math.max(0, Math.min(1, d / 30));
+  return t < .25 ? [0, t*4, 1] : t < .5 ? [0, 1, 1-(t-.25)*4] : t < .75 ? [(t-.5)*4, 1, 0] : [1, 1-(t-.75)*4, 0];
 }
 
 function updateCloud(data) {
-  const n = Math.min(data.length/4, MP), p=geo.getAttribute('position').array, c=geo.getAttribute('color').array;
-  for (let i=0;i<n;i++) { const x=data[i*4],y=data[i*4+1],z=data[i*4+2],int=data[i*4+3]; p[i*3]=y;p[i*3+1]=z;p[i*3+2]=-x; const cl=cFn(x,y,z,int);c[i*3]=cl[0];c[i*3+1]=cl[1];c[i*3+2]=cl[2]; }
-  geo.getAttribute('position').needsUpdate=true; geo.getAttribute('color').needsUpdate=true;
-  geo.setDrawRange(0,n); geo.computeBoundingSphere();
-  fc++; const now=performance.now(); if(now-lfps>=1000){dfps=fc;fc=0;lfps=now;}
-  document.getElementById('fpsVal').textContent=dfps; document.getElementById('ptsVal').textContent=n.toLocaleString();
+  const n = Math.min(data.length / 4, MAX_PTS);
+  const p = geo.getAttribute('position').array, c = geo.getAttribute('color').array;
+  for (let i = 0; i < n; i++) {
+    const x = data[i*4], y = data[i*4+1], z = data[i*4+2], int = data[i*4+3];
+    p[i*3] = y; p[i*3+1] = z; p[i*3+2] = -x;
+    const cl = colorFn(x, y, z, int); c[i*3] = cl[0]; c[i*3+1] = cl[1]; c[i*3+2] = cl[2];
+  }
+  geo.getAttribute('position').needsUpdate = true;
+  geo.getAttribute('color').needsUpdate = true;
+  geo.setDrawRange(0, n); geo.computeBoundingSphere();
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 1000) { displayFps = frameCount; frameCount = 0; lastFpsTime = now; }
+  document.getElementById('fpsVal').textContent = displayFps;
+  document.getElementById('ptsVal').textContent = n.toLocaleString();
 }
 
-function resizeR() { const w=wrap.clientWidth,h=wrap.clientHeight; renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); }
-window.addEventListener('resize', resizeR);
-window.cycleColor=()=>{colorMode=(colorMode+1)%3;document.getElementById('colorLbl').textContent=cmNames[colorMode];};
-window.cycleSize=()=>{sizeIdx=(sizeIdx+1)%sizes.length;mat.size=sizes[sizeIdx];};
-window.toggleGrid=()=>{grid.visible=!grid.visible;ax.visible=grid.visible;};
-window.resetView=()=>{camera.position.set(0,8,15);camera.lookAt(0,0,0);ctrl.target.set(0,0,0);ctrl.update();};
+function resizeRenderer() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resizeRenderer);
 
-/* ══════════════════════
-   Topology SVG
-   ══════════════════════ */
+function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+
+/* ══════════════════════════════════════════
+   Controls (exposed to window)
+   ══════════════════════════════════════════ */
+window.cycleColor = () => { colorMode = (colorMode + 1) % 3; document.getElementById('colorLabel').textContent = colorModes[colorMode]; };
+window.cycleSize = () => { sizeIdx = (sizeIdx + 1) % sizes.length; mat.size = sizes[sizeIdx]; document.getElementById('sizeLabel').textContent = sizeIdx + 1; };
+window.toggleGrid = () => { gridHelper.visible = !gridHelper.visible; axes.visible = gridHelper.visible; };
+window.resetView = () => { camera.position.set(0, 8, 15); camera.lookAt(0,0,0); controls.target.set(0,0,0); controls.update(); };
+
+/* ══════════════════════════════════════════
+   WebSockets — Cloud + Timing
+   ══════════════════════════════════════════ */
+let wsCloud = null, wsTiming = null;
+
+function connectCloud(id) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  wsCloud = new WebSocket(`${proto}//${location.host}/ws/lidar-${id.replace('lidar-', '')}`);
+  wsCloud.binaryType = 'arraybuffer';
+  wsCloud.onopen = () => { document.getElementById('cloudDot').className = 'dot dot-on'; document.getElementById('cloudStatus').textContent = 'Cloud'; };
+  wsCloud.onmessage = (e) => { if (e.data instanceof ArrayBuffer) updateCloud(new Float32Array(e.data)); };
+  wsCloud.onclose = () => { document.getElementById('cloudDot').className = 'dot dot-off'; document.getElementById('cloudStatus').textContent = 'Off'; setTimeout(() => connectCloud(id), 2000); };
+  wsCloud.onerror = () => wsCloud.close();
+}
+
+function connectTiming(id) {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  wsTiming = new WebSocket(`${proto}//${location.host}/ws/lidar-timing-${id.replace('lidar-', '')}`);
+  wsTiming.onopen = () => { document.getElementById('timingDot').className = 'dot dot-on'; document.getElementById('timingStatus').textContent = 'Live'; };
+  wsTiming.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'pkt') { timingPkts.push(m); if (timingPkts.length > MAX_TIMING) timingPkts.shift(); }
+    else if (m.type === 'profile') { profile = m.profile; autoTas = m.autoTas; onProfile(); }
+  };
+  wsTiming.onclose = () => { document.getElementById('timingDot').className = 'dot dot-off'; document.getElementById('timingStatus').textContent = 'Off'; setTimeout(() => connectTiming(id), 2000); };
+  wsTiming.onerror = () => wsTiming.close();
+}
+
+/* ══════════════════════════════════════════
+   State: Editor + Board
+   ══════════════════════════════════════════ */
+const TCC = ['#8e8e93','#ff453a','#30d158','#ff9f0a','#bf5af2','#5e5ce6','#64d2ff','#0a84ff'];
+const TCN = ['TC0','TC1','TC2','TC3','TC4','TC5','TC6','TC7'];
+let ed = { mode: 'auto', cycleUs: 3130, margin: 2.0, entries: [] };
+let boardStatus = {};
+
+/* ══════════════════════════════════════════
+   Topology
+   ══════════════════════════════════════════ */
 function renderTopo() {
-  const svg = document.getElementById('topoSvg');
-  const boards = config.boards || [];
-  // Nodes: LiDAR -> Switch(es) -> PC
-  let html = '';
-  // Connection lines
-  html += `<line x1="60" y1="35" x2="140" y2="35" stroke="#007aff" stroke-width="2" stroke-dasharray="4,2" opacity=".4"/>`;
-  // Board(s)
-  const bx = boards.length > 1 ? [140, 200, 260] : [185];
-  boards.forEach((b, i) => {
-    const x = boards.length > 1 ? 140 + i * 60 : 185;
-    if (i > 0) html += `<line x1="${x-60}" y1="35" x2="${x}" y2="35" stroke="#34c759" stroke-width="2" opacity=".3"/>`;
-    html += `<line x1="${x}" y1="35" x2="${x + 60}" y2="35" stroke="#34c759" stroke-width="2" opacity=".3"/>`;
-    const connected = boardStatus[b.id];
-    const col = connected ? '#34c759' : '#aeaeb2';
-    html += `<rect x="${x-25}" y="14" width="50" height="42" rx="8" fill="${connected ? 'rgba(52,199,89,.06)' : 'rgba(0,0,0,.02)'}" stroke="${col}" stroke-width="1.5"/>`;
-    html += `<text x="${x}" y="31" text-anchor="middle" font-size="8" font-weight="800" fill="${col}">${b.id.replace('SW_','')}</text>`;
-    html += `<text x="${x}" y="42" text-anchor="middle" font-size="6" font-weight="500" fill="#aeaeb2">${b.host}</text>`;
-    html += `<circle cx="${x+20}" cy="19" r="3" fill="${col}"/>`;
-  });
-  const lastBx = boards.length > 1 ? 140 + (boards.length-1)*60 : 185;
-  // LiDAR
-  html += `<rect x="15" y="18" width="44" height="34" rx="8" fill="rgba(0,122,255,.06)" stroke="#007aff" stroke-width="1.5"/>`;
-  html += `<text x="37" y="33" text-anchor="middle" font-size="7" font-weight="800" fill="#007aff">LiDAR</text>`;
-  html += `<text x="37" y="43" text-anchor="middle" font-size="5" fill="#aeaeb2">UDP :7502</text>`;
-  // PC
-  const pcx = lastBx + 60;
-  html += `<rect x="${pcx-22}" y="18" width="44" height="34" rx="8" fill="rgba(88,86,214,.06)" stroke="#5856d6" stroke-width="1.5"/>`;
-  html += `<text x="${pcx}" y="33" text-anchor="middle" font-size="7" font-weight="800" fill="#5856d6">Server</text>`;
-  html += `<text x="${pcx}" y="43" text-anchor="middle" font-size="5" fill="#aeaeb2">:3000</text>`;
-  svg.innerHTML = html;
+  const bar = document.getElementById('topoBar');
+  // LiDAR node
+  let html = `<div class="topo-node active"><div class="topo-name" style="color:#0a84ff">LiDAR</div><div class="topo-ip">UDP :7502</div><div class="topo-dot" style="background:var(--green);box-shadow:0 0 4px var(--green)"></div></div>`;
+  html += `<span class="topo-arrow">→</span>`;
+  // Boards
+  for (const b of config.boards) {
+    const on = boardStatus[b.id];
+    html += `<div class="topo-node${on ? ' active' : ''}"><div class="topo-name" style="color:${on ? '#30d158' : 'var(--text3)'}">${b.id.replace('SW_','')}</div><div class="topo-ip">${b.host}</div><div class="topo-dot" style="background:${on ? 'var(--green)' : 'var(--text3)'}${on ? ';box-shadow:0 0 4px var(--green)' : ''}"></div></div>`;
+    html += `<span class="topo-arrow">→</span>`;
+  }
+  // Server
+  html += `<div class="topo-node active"><div class="topo-name" style="color:#5e5ce6">Server</div><div class="topo-ip">:3000</div><div class="topo-dot" style="background:var(--green);box-shadow:0 0 4px var(--green)"></div></div>`;
+  bar.innerHTML = html;
 }
 
-/* ══════════════════════
-   WebSockets
-   ══════════════════════ */
-let wsC = null, wsT = null;
-function connCloud(id) {
-  const p = location.protocol==='https:'?'wss:':'ws:';
-  wsC = new WebSocket(`${p}//${location.host}/ws/lidar-${id.replace('lidar-','')}`);
-  wsC.binaryType='arraybuffer';
-  wsC.onopen=()=>{document.getElementById('cloudDot').className='dot dot-on';document.getElementById('cloudSt').textContent='Cloud';};
-  wsC.onmessage=(e)=>{if(e.data instanceof ArrayBuffer)updateCloud(new Float32Array(e.data));};
-  wsC.onclose=()=>{document.getElementById('cloudDot').className='dot dot-off';document.getElementById('cloudSt').textContent='Off';setTimeout(()=>connCloud(id),2000);};
-  wsC.onerror=()=>wsC.close();
-}
-function connTiming(id) {
-  const p = location.protocol==='https:'?'wss:':'ws:';
-  wsT = new WebSocket(`${p}//${location.host}/ws/lidar-timing-${id.replace('lidar-','')}`);
-  wsT.onopen=()=>{document.getElementById('timDot').className='sdot on';document.getElementById('timSt').textContent='Live';};
-  wsT.onmessage=(e)=>{const m=JSON.parse(e.data);if(m.type==='pkt'){tPkts.push(m);if(tPkts.length>MAX_T)tPkts.shift();}else if(m.type==='profile'){profile=m.profile;autoTas=m.autoTas;updateUI();}};
-  wsT.onclose=()=>{document.getElementById('timDot').className='sdot';document.getElementById('timSt').textContent='Off';setTimeout(()=>connTiming(id),2000);};
-  wsT.onerror=()=>wsT.close();
+async function checkBoards() {
+  try { const r = await fetch('/api/boards/status'); const bs = await r.json(); for (const b of bs) boardStatus[b.id] = b.connected; renderTopo(); } catch {}
 }
 
-/* ══════════════════════
-   UI Updates
-   ══════════════════════ */
-function updateUI() {
+/* ══════════════════════════════════════════
+   Stats
+   ══════════════════════════════════════════ */
+function updateStats() {
   if (!profile) return;
   document.getElementById('sFps').textContent = profile.fps;
-  document.getElementById('sPkt').textContent = profile.pktIntervalUs.toLocaleString();
-  document.getElementById('sJit').textContent = profile.jitterUs;
+  document.getElementById('sPktInt').textContent = profile.pktIntervalUs.toLocaleString();
+  document.getElementById('sJitter').textContent = profile.jitterUs;
   document.getElementById('sBw').textContent = profile.bandwidthMbps;
-  if (autoTas && !autoTas.error) {
-    document.getElementById('sWire').textContent = autoTas.pktTxUs;
-    if (editor.mode === 'auto') syncAuto();
-  }
 }
 
-/* ══════════════════════
+function onProfile() {
+  updateStats();
+  if (ed.mode === 'auto' && autoTas && !autoTas.error) syncAuto();
+}
+
+/* ══════════════════════════════════════════
    GCL Editor
-   ══════════════════════ */
-window.setMode = (m) => {
-  editor.mode = m;
-  document.getElementById('mAuto').className = 'mode-b' + (m==='auto'?' on':'');
-  document.getElementById('mCust').className = 'mode-b' + (m==='custom'?' on':'');
-  if (m==='auto' && autoTas) syncAuto();
-  upPush();
-};
+   ══════════════════════════════════════════ */
+window.setMode = (m) => { ed.mode=m; document.getElementById('mAuto').className='mode-pb'+(m==='auto'?' on':''); document.getElementById('mCust').className='mode-pb'+(m==='custom'?' on':''); if(m==='auto'&&autoTas)syncAuto(); upPush(); };
 
 function syncAuto() {
-  if (!autoTas || autoTas.error) return;
-  editor.cycleUs = autoTas.cycleUs;
-  editor.entries = autoTas.entries.map(e => ({ gs: e.gateStates, dur: e.durationUs }));
-  document.getElementById('cCycle').value = editor.cycleUs;
-  document.getElementById('cCycleSl').value = Math.min(10000, editor.cycleUs);
-  renderGcl();
+  if (!autoTas) return;
+  ed.cycleUs = autoTas.cycleUs;
+  ed.entries = autoTas.entries.map(e => ({ gs: e.gateStates, dur: e.durationUs }));
+  document.getElementById('eCycle').value = ed.cycleUs;
+  document.getElementById('eCycleSl').value = Math.min(10000, ed.cycleUs);
+  renderEd();
 }
 
-window.editCycle = (v) => { v=Math.max(10,Math.round(v)); editor.cycleUs=v; editor.mode='custom'; setMode('custom'); document.getElementById('cCycle').value=v; document.getElementById('cCycleSl').value=Math.min(10000,v); recalcBE(); renderGcl(); };
-window.editMargin = (v) => { editor.margin=Math.round(v*10)/10; document.getElementById('cMarginV').innerHTML=`${editor.margin.toFixed(1)}<span class="cr-u">×</span>`; if(editor.mode==='auto'&&autoTas){const w=autoTas.pktTxUs||27.44;if(editor.entries.length)editor.entries[0].dur=Math.round(w*editor.margin*10)/10;recalcBE();}renderGcl(); };
-window.editDur = (i,v) => { editor.mode='custom'; setMode('custom'); editor.entries[i].dur=Math.max(0.1,parseFloat(v)||0); renderGcl(); };
-window.togBit = (i,b) => { editor.mode='custom'; setMode('custom'); editor.entries[i].gs^=(1<<b); renderGcl(); };
-window.addEntry = () => { editor.mode='custom'; setMode('custom'); const u=editor.entries.reduce((s,e)=>s+e.dur,0); editor.entries.push({gs:255,dur:Math.max(1,Math.round((editor.cycleUs-u)*10)/10)}); renderGcl(); };
-window.rmEntry = (i) => { if(editor.entries.length<=1)return; editor.mode='custom'; setMode('custom'); editor.entries.splice(i,1); recalcBE(); renderGcl(); };
+window.eCycleChg = (v) => { v=Math.max(10,Math.round(v)); ed.cycleUs=v; ed.mode='custom'; setMode('custom'); document.getElementById('eCycle').value=v; document.getElementById('eCycleSl').value=Math.min(10000,v); recalcBE(); renderEd(); };
+window.eMarginChg = (v) => { ed.margin=Math.round(v*10)/10; document.getElementById('eMarginV').textContent=ed.margin.toFixed(1)+'×'; if(ed.mode==='auto'&&autoTas&&ed.entries.length){ed.entries[0].dur=Math.round((autoTas.pktTxUs||27.44)*ed.margin*10)/10;recalcBE();}renderEd(); };
+window.eDur = (i,v) => { ed.mode='custom'; setMode('custom'); ed.entries[i].dur=Math.max(0.1,parseFloat(v)||0); renderEd(); };
+window.eTog = (i,b) => { ed.mode='custom'; setMode('custom'); ed.entries[i].gs^=(1<<b); renderEd(); };
+window.eAdd = () => { ed.mode='custom'; setMode('custom'); const u=ed.entries.reduce((s,e)=>s+e.dur,0); ed.entries.push({gs:255,dur:Math.max(1,Math.round((ed.cycleUs-u)*10)/10)}); renderEd(); };
+window.eRm = (i) => { if(ed.entries.length<=1)return; ed.mode='custom'; setMode('custom'); ed.entries.splice(i,1); recalcBE(); renderEd(); };
 
-function recalcBE() { if(editor.entries.length<2)return; const li=editor.entries.length-1; const os=editor.entries.slice(0,li).reduce((s,e)=>s+e.dur,0); editor.entries[li].dur=Math.round((editor.cycleUs-os)*10)/10; }
+function recalcBE() { if(ed.entries.length<2)return; const li=ed.entries.length-1; const os=ed.entries.slice(0,li).reduce((s,e)=>s+e.dur,0); ed.entries[li].dur=Math.round((ed.cycleUs-os)*10)/10; }
 
-function renderGcl() {
-  // Table
-  document.getElementById('gBody').innerHTML = editor.entries.map((e,i) => {
-    let bits='<span class="gbits">';
-    for(let b=7;b>=0;b--){const on=(e.gs>>b)&1;bits+=`<span class="gb ${on?'on':'off'}${editor.mode==='custom'?' clk':''}" style="${on?'background:'+TC[b].c:''}" ${editor.mode==='custom'?`onclick="togBit(${i},${b})"`:''} title="${TC[b].n}">${b}</span>`;}
-    bits+='</span>';
-    const tcs = e.gs===255?'<span style="color:var(--text3)">All</span>':e.gs===0?'<span style="color:var(--orange)">Guard</span>':Array.from({length:8},(_,b)=>7-b).filter(b=>(e.gs>>b)&1).map(b=>`<span style="color:${TC[b].c};font-weight:700">${TC[b].n}</span>`).join(' ');
-    return `<tr><td style="color:var(--text3);font-weight:700">${i}</td><td>${bits}</td><td>${tcs}</td><td><input type="number" class="dur-in" value="${e.dur}" step="0.1" onchange="editDur(${i},this.value)" ${editor.mode==='auto'?'disabled':''}></td><td>${editor.entries.length>1?`<button class="btn-x" onclick="rmEntry(${i})">×</button>`:''}</td></tr>`;
+function renderEd() {
+  const custom = ed.mode === 'custom';
+  document.getElementById('eBody').innerHTML = ed.entries.map((e,i) => {
+    let bits = '';
+    for(let b=7;b>=0;b--){const on=(e.gs>>b)&1;bits+=`<span class="ebit ${on?'on':'off'}${custom?' clk':''}" style="${on?'background:'+TCC[b]:''}" ${custom?`onclick="eTog(${i},${b})"`:''} title="${TCN[b]}">${b}</span>`;}
+    const tcs = e.gs===255?'<span style="color:var(--text3)">All</span>':e.gs===0?'<span style="color:var(--orange)">Guard</span>':Array.from({length:8},(_,j)=>7-j).filter(b=>(e.gs>>b)&1).map(b=>`<span style="color:${TCC[b]}">${TCN[b]}</span>`).join(' ');
+    return `<tr><td style="color:var(--text3);font-weight:700">${i}</td><td><span class="gbits">${bits}</span></td><td style="font-size:0.48rem">${tcs}</td><td><input type="number" class="edur" value="${e.dur}" step="0.1" onchange="eDur(${i},this.value)" ${custom?'':'disabled'}></td><td>${ed.entries.length>1?`<button class="ebtn-x" onclick="eRm(${i})">×</button>`:''}</td></tr>`;
   }).join('');
 
   // Gantt
-  const total = editor.entries.reduce((s,e)=>s+e.dur,0);
-  document.getElementById('ganttBar').innerHTML = editor.entries.map(e => {
-    const pct = e.dur / editor.cycleUs * 100;
-    let bg = 'rgba(0,0,0,.02)';
-    if (e.gs===128) bg='rgba(0,122,255,.15)'; else if(e.gs===0) bg='rgba(255,204,0,.12)'; else if(e.gs!==255&&e.gs!==127) bg=TC.find((_,b)=>(e.gs>>(7-b))&1)?.c+'22'||'rgba(0,0,0,.03)';
-    const lbl = pct>4 ? (e.gs===128?'TC7':e.gs===127?'BE':e.gs===0?'G':e.gs===255?'ALL':'') : '';
-    return `<div class="g-seg" style="flex:${pct};background:${bg};color:var(--text3)">${lbl}</div>`;
+  document.getElementById('eGantt').innerHTML = ed.entries.map(e => {
+    const pct = e.dur / ed.cycleUs * 100;
+    let bg = 'rgba(255,255,255,.03)';
+    if(e.gs===128) bg='rgba(10,132,255,.3)'; else if(e.gs===0) bg='rgba(255,214,10,.15)'; else if(e.gs!==255&&e.gs!==127) { for(let b=7;b>=0;b--) if((e.gs>>b)&1){bg=TCC[b]+'44';break;} }
+    const lbl = pct>4?(e.gs===128?'TC7':e.gs===127?'BE':e.gs===0?'G':e.gs===255?'ALL':''):'';
+    return `<div class="gm-seg" style="flex:${pct};background:${bg};color:var(--text3)">${lbl}</div>`;
   }).join('');
 
-  const diff = Math.round((total - editor.cycleUs)*10)/10;
-  const gi = document.getElementById('ganttInfo');
-  if (Math.abs(diff)<0.2) gi.innerHTML=`Cycle <strong>${editor.cycleUs} µs</strong> &middot; ${editor.entries.length} entries &middot; TC7 ${editor.entries[0]?.dur||'—'} µs`;
-  else gi.innerHTML=`<span class="gantt-warn">Total ${total.toFixed(1)} µs ≠ cycle ${editor.cycleUs} µs (${diff>0?'+':''}${diff})</span>`;
+  const total = ed.entries.reduce((s,e)=>s+e.dur,0);
+  const diff = Math.round((total-ed.cycleUs)*10)/10;
+  const note = document.getElementById('eGanttNote');
+  if(Math.abs(diff)<0.2) note.innerHTML=`Cycle <strong style="color:var(--text2)">${ed.cycleUs} µs</strong> · ${ed.entries.length} entries`;
+  else note.innerHTML=`<span class="gantt-warn">Total ${total.toFixed(1)} µs ≠ cycle ${ed.cycleUs} µs (${diff>0?'+':''}${diff})</span>`;
   upPush();
 }
 
-function upPush() { document.getElementById('btnPush').disabled = !document.getElementById('boardSel').value || !editor.entries.length; }
+function upPush() { document.getElementById('btnPush').disabled = !document.getElementById('boardSel').value || !ed.entries.length; }
 
-/* ══════════════════════
-   Board Status + Actions
-   ══════════════════════ */
-let boardStatus = {};
-
-async function checkBoards() {
-  try {
-    const r = await fetch('/api/boards/status'); const bs = await r.json();
-    for (const b of bs) boardStatus[b.id] = b.connected;
-    renderTopo();
-  } catch {}
+/* ══════════════════════════════════════════
+   Timing Canvases
+   ══════════════════════════════════════════ */
+function getCtx(id) {
+  const c = document.getElementById(id);
+  const dpr = Math.min(devicePixelRatio, 2);
+  const r = c.getBoundingClientRect();
+  c.width = r.width * dpr; c.height = r.height * dpr;
+  const x = c.getContext('2d'); x.scale(dpr, dpr);
+  return { x, w: r.width, h: r.height };
 }
 
-function getBoardHost() { const id=document.getElementById('boardSel').value; return config.boards.find(b=>b.id===id)?.host; }
+function drawScope() {
+  const { x, w, h } = getCtx('cScope'); x.clearRect(0, 0, w, h);
+  if (timingPkts.length < 2) return;
+  const winUs = 500000, now = timingPkts[timingPkts.length - 1].t, start = now - winUs;
+  const top = 18, bot = 12;
+  let toggle = false;
+  for (const p of timingPkts) { if (p.t < start) continue; if (p.newFrame) toggle = !toggle;
+    if (toggle) { const px = (p.t - start) / winUs * w; x.fillStyle = 'rgba(10,132,255,.06)'; x.fillRect(px, top, 2, h - top - bot); } }
+  for (const p of timingPkts) { if (p.t < start) continue; const px = (p.t - start) / winUs * w; const int = Math.min(1, p.pts / 16);
+    if (p.newFrame) { x.strokeStyle = 'rgba(100,210,255,.15)'; x.lineWidth = 0.5; x.beginPath(); x.moveTo(px, top); x.lineTo(px, h - bot); x.stroke(); }
+    const bh = 4 + int * (h - top - bot - 8); x.fillStyle = `rgba(10,132,255,${0.2 + int * 0.6})`; x.fillRect(px, h - bot - bh, 1.5, bh); }
+  x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '8px Inter';
+  for (let i = 0; i <= 5; i++) x.fillText(`${i * 100}ms`, (i / 5) * w + 2, h - 1);
+}
+
+function drawJitter() {
+  const { x, w, h } = getCtx('cJitter'); x.clearRect(0, 0, w, h);
+  if (timingPkts.length < 10) return;
+  const ints = [];
+  for (let i = Math.max(0, timingPkts.length - 300); i < timingPkts.length - 1; i++) ints.push(timingPkts[i + 1].t - timingPkts[i].t);
+  if (ints.length < 5) return;
+  const top = 18, bot = 12, maxInt = Math.max(...ints) * 1.1, bins = 50, binW = maxInt / bins;
+  const counts = new Array(bins).fill(0);
+  for (const v of ints) { const b = Math.min(bins - 1, Math.floor(v / binW)); counts[b]++; }
+  const maxC = Math.max(...counts, 1), barW = (w - 16) / bins;
+  const expectedUs = profile ? profile.pktIntervalUs : 3125;
+  for (let i = 0; i < bins; i++) { if (!counts[i]) continue;
+    const bh = (counts[i] / maxC) * (h - top - bot), bx = 8 + i * barW;
+    const dist = Math.abs(i * binW - expectedUs) / expectedUs;
+    const color = dist < .1 ? 'rgba(48,209,88,.5)' : dist < .5 ? 'rgba(255,214,10,.35)' : 'rgba(255,69,58,.35)';
+    x.fillStyle = color; x.beginPath(); x.roundRect(bx, h - bot - bh, Math.max(barW - 1, 1), bh, 1); x.fill(); }
+  if (profile) { const ex = 8 + (expectedUs / maxInt) * (w - 16);
+    x.strokeStyle = 'rgba(10,132,255,.4)'; x.lineWidth = 1; x.setLineDash([3, 3]);
+    x.beginPath(); x.moveTo(ex, top); x.lineTo(ex, h - bot); x.stroke(); x.setLineDash([]);
+    x.fillStyle = 'rgba(10,132,255,.5)'; x.font = '8px Inter'; x.fillText(`${expectedUs.toLocaleString()} µs`, ex + 3, top + 10); }
+  x.fillStyle = 'rgba(255,255,255,.12)'; x.font = '7px Inter';
+  for (let i = 0; i <= 4; i++) x.fillText(`${Math.round(maxInt * i / 4).toLocaleString()}µs`, 8 + (i / 4) * (w - 16), h - 1);
+}
+
+function renderTimingLoop() { requestAnimationFrame(renderTimingLoop); drawScope(); drawJitter(); }
+
+/* ══════════════════════════════════════════
+   Board Actions
+   ══════════════════════════════════════════ */
+function getBoardHost() {
+  const id = document.getElementById('boardSel').value;
+  const b = config.boards.find(x => x.id === id);
+  return b ? b.host : null;
+}
 
 window.pushTas = async () => {
-  const boardId=document.getElementById('boardSel').value, portVal=document.getElementById('portSel').value, host=getBoardHost();
-  if(!boardId||!host)return;
-  const btn=document.getElementById('btnPush'); btn.disabled=true; btn.textContent='...';
-  const ports=portVal==='both'?['1','2']:[portVal];
-  const entries=editor.entries.map(e=>({gateStates:e.gs,durationUs:e.dur}));
+  if (!ed.entries.length) return;
+  const boardId = document.getElementById('boardSel').value;
+  const portVal = document.getElementById('portSel').value;
+  const host = getBoardHost();
+  if (!boardId || !host) return;
+  const btn = document.getElementById('btnPush');
+  btn.disabled = true; btn.textContent = '...';
+  const ports = portVal === 'both' ? ['1', '2'] : [portVal];
+  const entries = ed.entries.map(e => ({ gateStates: e.gs, durationUs: e.dur }));
   try {
-    for(const port of ports){const r=await fetch('/api/gcl/push-port',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({port,cycleUs:editor.cycleUs,entries,transport:'eth',host})}); const d=await r.json(); if(!d.success)throw new Error(`P${port}: ${d.error||d.output}`);}
-    toast(`TAS → ${boardId} (${ports.join('+')})`, 'ok');
-    btn.textContent='✓'; setTimeout(()=>{btn.textContent='Push TAS';btn.disabled=false;},2000);
-  } catch(e){ toast(e.message,'err'); btn.textContent='Push TAS'; btn.disabled=false; }
+    for (const port of ports) {
+      const r = await fetch('/api/gcl/push-port', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port, cycleUs: ed.cycleUs, entries, transport: 'eth', host }) });
+      const d = await r.json(); if (!d.success) throw new Error(`P${port}: ${d.error || d.output}`);
+    }
+    showToast(`TAS → ${boardId} (${ports.join('+')})`, 'ok');
+    btn.textContent = '✓'; setTimeout(() => { btn.textContent = 'Push TAS'; btn.disabled = false; }, 2000);
+  } catch (e) { showToast(e.message, 'err'); btn.textContent = 'Push TAS'; btn.disabled = false; }
 };
 
 window.runBenchmark = async () => {
-  if(!selectedLidar)return;
-  const boardId=document.getElementById('boardSel').value; if(!boardId){toast('Select board','err');return;}
-  const port=document.getElementById('portSel').value==='both'?'1':document.getElementById('portSel').value;
+  if (!selectedLidar) return;
+  const boardId = document.getElementById('boardSel').value;
+  if (!boardId) { showToast('Select board', 'err'); return; }
+  const port = document.getElementById('portSel').value === 'both' ? '1' : document.getElementById('portSel').value;
   try {
-    const r=await fetch(`/api/lidar/benchmark/${selectedLidar.id}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({boardId,port,transport:'eth'})});
-    const d=await r.json(); if(d.error){toast(d.error,'err');return;}
-    const t=d.timings;
-    document.getElementById('benchStrip').innerHTML=`<div class="bench-i"><div class="bench-v" style="color:var(--blue)">${t.boardPushMs}</div><div class="bench-l">Push ms</div></div><div class="bench-i"><div class="bench-v" style="color:var(--green)">${t.totalMs}</div><div class="bench-l">Total</div></div>`;
-    toast(`${t.totalMs}ms`, 'ok');
-  } catch(e){toast(e.message,'err');}
+    const r = await fetch(`/api/lidar/benchmark/${selectedLidar.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ boardId, port, transport: 'eth' }) });
+    const d = await r.json(); if (d.error) { showToast(d.error, 'err'); return; }
+    const t = d.timings;
+    document.getElementById('benchStrip').innerHTML =
+      `<div class="bench-item"><div class="bench-val" style="color:var(--blue)">${t.boardPushMs}</div><div class="bench-lbl">Push ms</div></div>
+       <div class="bench-item"><div class="bench-val" style="color:var(--green)">${t.totalMs}</div><div class="bench-lbl">Total ms</div></div>`;
+    showToast(`${t.totalMs}ms (${d.saved})`, 'ok');
+  } catch (e) { showToast(e.message, 'err'); }
 };
 
 window.captureSnapshot = async () => {
-  if(!selectedLidar)return;
-  try{const r=await fetch(`/api/lidar/capture/${selectedLidar.id}`,{method:'POST'});const d=await r.json();toast(d.saved?`Saved: ${d.saved}`:(d.error||'No data'),d.saved?'ok':'err');}catch(e){toast(e.message,'err');}
+  if (!selectedLidar) return;
+  try {
+    const r = await fetch(`/api/lidar/capture/${selectedLidar.id}`, { method: 'POST' });
+    const d = await r.json();
+    showToast(d.saved ? `Saved: ${d.saved}` : (d.error || 'No data'), d.saved ? 'ok' : 'err');
+  } catch (e) { showToast(e.message, 'err'); }
 };
 
-function toast(msg,type){const t=document.createElement('div');t.className=`toast toast-${type}`;t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
-
-/* ══════════════════════
-   Canvas Drawing
-   ══════════════════════ */
-function getCtx(id){const c=document.getElementById(id);const dpr=Math.min(devicePixelRatio,2);const r=c.getBoundingClientRect();c.width=r.width*dpr;c.height=r.height*dpr;const x=c.getContext('2d');x.scale(dpr,dpr);return{x,w:r.width,h:r.height};}
-
-function drawScope(){
-  const{x,w,h}=getCtx('cScope');x.clearRect(0,0,w,h);
-  if(tPkts.length<2)return;
-  const win=500000,now=tPkts[tPkts.length-1].t,start=now-win;
-  const top=16,bot=10; let tog=false;
-  for(const p of tPkts){if(p.t<start)continue;if(p.newFrame)tog=!tog;if(tog){const px=(p.t-start)/win*w;x.fillStyle='rgba(0,122,255,.04)';x.fillRect(px,top,2,h-top-bot);}}
-  for(const p of tPkts){if(p.t<start)continue;const px=(p.t-start)/win*w;const int=Math.min(1,p.pts/16);
-    if(p.newFrame){x.strokeStyle='rgba(50,173,230,.2)';x.lineWidth=0.5;x.beginPath();x.moveTo(px,top);x.lineTo(px,h-bot);x.stroke();}
-    const bh=3+int*(h-top-bot-6);x.fillStyle=`rgba(0,122,255,${0.15+int*0.5})`;x.fillRect(px,h-bot-bh,1.5,bh);}
-  x.fillStyle='rgba(0,0,0,.15)';x.font='7px Inter';
-  for(let i=0;i<=5;i++)x.fillText(`${i*100}ms`,(i/5)*w+2,h-1);
+function showToast(msg, type) {
+  const t = document.createElement('div'); t.className = `toast toast-${type}`; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
 }
 
-function renderLoop(){requestAnimationFrame(renderLoop);drawScope();}
-
-/* ══════════════════════
+/* ══════════════════════════════════════════
    Init
-   ══════════════════════ */
-async function init(){
-  try{config=await(await fetch('/api/config')).json();}catch{}
-  if(!config.lidars.length)config.lidars=[{id:'lidar-a',label:'Ouster A',udpPort:7502}];
-  selectedLidar=config.lidars[0];
-  const bs=document.getElementById('boardSel');
-  config.boards.forEach(b=>{const o=document.createElement('option');o.value=b.id;o.textContent=`${b.id} (${b.host})`;bs.appendChild(o);});
-  bs.addEventListener('change',()=>{upPush();checkBoards();});
+   ══════════════════════════════════════════ */
+async function init() {
+  try { config = await (await fetch('/api/config')).json(); } catch {}
+  if (!config.lidars.length) config.lidars = [{ id: 'lidar-a', label: 'Ouster A', udpPort: 7502 }];
+  selectedLidar = config.lidars[0];
+
+  const bs = document.getElementById('boardSel');
+  config.boards.forEach(b => { const o = document.createElement('option'); o.value = b.id; o.textContent = `${b.id} (${b.host})`; bs.appendChild(o); });
+  bs.addEventListener('change', () => { upPush(); checkBoards(); });
+
   renderTopo();
   checkBoards();
   setInterval(checkBoards, 15000);
-  connCloud(selectedLidar.id);
-  connTiming(selectedLidar.id);
-  resizeR();
+  renderEd();
+
+  connectCloud(selectedLidar.id);
+  connectTiming(selectedLidar.id);
+  resizeRenderer();
   animate();
-  function animate(){requestAnimationFrame(animate);ctrl.update();renderer.render(scene,camera);}
-  renderLoop();
-  renderGcl();
+  renderTimingLoop();
 }
+
 init();
 </script>
 </body>
