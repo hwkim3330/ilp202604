@@ -60,43 +60,50 @@ async function ketiTsn(args, timeout = 30000) {
   });
 }
 
-/* ── GET /api/board/status ── (backward compat) */
+/* ── GET /api/board/status ── (backward compat, eth → serial fallback) */
 router.get('/board/status', async (req, res) => {
-  const transport = req.query.transport || 'serial';
   const device = req.query.device || '/dev/ttyACM0';
-  const host = req.query.host || null;
+  const host = req.query.host || boards[0]?.host;
 
-  if (transport === 'serial') {
-    const connected = fs.existsSync(device);
-    return res.json({ connected, device, transport });
+  // Try ethernet if host available
+  if (host) {
+    try {
+      const { stdout } = await ketiTsn(['checksum', '--transport', 'eth', '--host', host], 5000);
+      const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
+      if (connected) return res.json({ connected: true, transport: 'eth', host });
+    } catch {}
   }
-
-  if (!host) {
-    return res.json({ connected: false, transport, error: 'host required for eth/wifi' });
+  // Fallback to serial
+  if (fs.existsSync(device)) {
+    try {
+      const { stdout } = await ketiTsn(['checksum', '--transport', 'serial', '--port', device], 5000);
+      const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
+      if (connected) return res.json({ connected: true, transport: 'serial', device });
+    } catch {}
   }
-  try {
-    const args = ['checksum', '--transport', transport, '--host', host];
-    const { stdout } = await ketiTsn(args, 5000);
-    const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
-    res.json({ connected, transport, host, output: stdout.trim() });
-  } catch (e) {
-    res.json({ connected: false, transport, host, error: e.message });
-  }
+  res.json({ connected: false, transport: 'none' });
 });
 
-/* ── GET /api/board/:boardId/status ── Per-board status by config ID */
+/* ── GET /api/board/:boardId/status ── Per-board status (eth → serial fallback) */
 router.get('/board/:boardId/status', async (req, res) => {
   const board = boards.find(b => b.id === req.params.boardId);
   if (!board) return res.status(404).json({ error: `Board not found: ${req.params.boardId}` });
 
+  // Try ethernet
   try {
-    const args = ['checksum', '--transport', 'eth', '--host', board.host];
-    const { stdout } = await ketiTsn(args, 5000);
+    const { stdout } = await ketiTsn(['checksum', '--transport', 'eth', '--host', board.host], 5000);
     const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
-    res.json({ id: board.id, connected, transport: 'eth', host: board.host, label: board.label });
-  } catch (e) {
-    res.json({ id: board.id, connected: false, transport: 'eth', host: board.host, error: e.message });
+    if (connected) return res.json({ id: board.id, connected: true, transport: 'eth', host: board.host, label: board.label });
+  } catch {}
+  // Fallback to serial (first board only)
+  if (board.id === boards[0]?.id && fs.existsSync('/dev/ttyACM0')) {
+    try {
+      const { stdout } = await ketiTsn(['checksum', '--transport', 'serial', '--port', '/dev/ttyACM0'], 5000);
+      const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
+      if (connected) return res.json({ id: board.id, connected: true, transport: 'serial', host: board.host, label: board.label });
+    } catch {}
   }
+  res.json({ id: board.id, connected: false, host: board.host, label: board.label });
 });
 
 /* ── GET /api/boards/status ── All boards status (eth → serial fallback) */
