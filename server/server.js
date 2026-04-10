@@ -268,6 +268,103 @@ app.get('/api/lidar/captures/:file', (req, res) => {
   res.json(JSON.parse(fs.readFileSync(fpath, 'utf8')));
 });
 
+// ── TAS ON/OFF Comparison: measure jitter before and after TAS ──
+app.post('/api/lidar/compare/:id', async (req, res) => {
+  const inst = lidar.instances.find(i => i.id === req.params.id);
+  if (!inst) return res.status(404).json({ error: 'LiDAR not found' });
+
+  const boardId = req.body.boardId || 'SW_REAR';
+  const portNum = req.body.port || '1';
+  const board = boards.find(b => b.id === boardId);
+  if (!board) return res.status(404).json({ error: `Board not found: ${boardId}` });
+
+  const measureSec = req.body.measureSec || 5;
+
+  const pushConfig = async (entries, cycleUs) => {
+    const pushRes = await fetch(`http://localhost:${port}/api/gcl/push-port`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ port: portNum, cycleUs, entries, transport: 'eth', host: board.host, boardId }),
+    });
+    return pushRes.json();
+  };
+
+  const snapshot = () => {
+    const profile = inst.getTrafficProfile();
+    const timing = inst.getTimingSnapshot();
+    if (!profile || !timing) return null;
+    // Compute packet interval stats from raw timestamps
+    const ints = timing.intervals_us;
+    if (ints.length < 10) return null;
+    const mean = ints.reduce((a, b) => a + b, 0) / ints.length;
+    const sorted = [...ints].sort((a, b) => a - b);
+    const p50 = sorted[Math.floor(ints.length * 0.5)];
+    const p95 = sorted[Math.floor(ints.length * 0.95)];
+    const p99 = sorted[Math.floor(ints.length * 0.99)];
+    const min = sorted[0], max = sorted[sorted.length - 1];
+    const jitter = Math.sqrt(ints.reduce((s, v) => s + (v - mean) ** 2, 0) / ints.length);
+    return {
+      fps: profile.fps,
+      pktIntervalUs: Math.round(mean * 100) / 100,
+      jitterUs: Math.round(jitter * 100) / 100,
+      minUs: Math.round(min * 100) / 100,
+      maxUs: Math.round(max * 100) / 100,
+      p50Us: Math.round(p50 * 100) / 100,
+      p95Us: Math.round(p95 * 100) / 100,
+      p99Us: Math.round(p99 * 100) / 100,
+      rangeUs: Math.round((max - min) * 100) / 100,
+      samples: ints.length,
+    };
+  };
+
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+  try {
+    const autoTas = inst.generateTasConfig();
+    if (!autoTas || autoTas.error) return res.json({ error: 'No auto-TAS available' });
+
+    const results = { boardId, port: portNum, measureSec };
+
+    // Phase 1: TAS OFF (All Open)
+    const offPush = await pushConfig(
+      [{ gateStates: 255, durationUs: 1000 }], 1000
+    );
+    results.offPush = offPush;
+    await wait(measureSec * 1000);
+    results.off = snapshot();
+
+    // Phase 2: TAS ON (Auto-derived)
+    const onEntries = autoTas.entries.map(e => ({ gateStates: e.gateStates, durationUs: e.durationUs }));
+    const onPush = await pushConfig(onEntries, autoTas.cycleUs);
+    results.onPush = onPush;
+    await wait(measureSec * 1000);
+    results.on = snapshot();
+
+    // Comparison
+    if (results.off && results.on) {
+      results.comparison = {
+        jitterReduction: Math.round((1 - results.on.jitterUs / results.off.jitterUs) * 10000) / 100,
+        rangeReduction: Math.round((1 - results.on.rangeUs / results.off.rangeUs) * 10000) / 100,
+        p99Reduction: Math.round((results.off.p99Us - results.on.p99Us) * 100) / 100,
+      };
+    }
+
+    results.autoTas = { cycleUs: autoTas.cycleUs, entries: autoTas.entries };
+    results.completedAt = new Date().toISOString();
+
+    // Save
+    const dataDir = path.join(ROOT, 'data');
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    const fname = `compare-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.json`;
+    fs.writeFileSync(path.join(dataDir, fname), JSON.stringify(results, null, 2));
+    results.saved = fname;
+
+    res.json(results);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 httpServer.listen(port, () => {
   console.log(`\n  KETI TSN Platform (Multi-Board)`);
   console.log(`  ────────────────────────────────`);

@@ -1,0 +1,72 @@
+{
+  "boardId": "SW_REAR",
+  "port": "1",
+  "measureSec": 5,
+  "offPush": {
+    "port": "1",
+    "success": true,
+    "entries": 1,
+    "output": ""
+  },
+  "off": {
+    "fps": 10,
+    "pktIntervalUs": 3124.91,
+    "jitterUs": 691.8,
+    "minUs": 61.74,
+    "maxUs": 16650.78,
+    "p50Us": 3119.33,
+    "p95Us": 3465.83,
+    "p99Us": 3718.09,
+    "rangeUs": 16589.04,
+    "samples": 499
+  },
+  "onPush": {
+    "port": "1",
+    "success": true,
+    "entries": 4,
+    "output": ""
+  },
+  "on": {
+    "fps": 10,
+    "pktIntervalUs": 3124.89,
+    "jitterUs": 251.1,
+    "minUs": 249.04,
+    "maxUs": 6216.46,
+    "p50Us": 3123.25,
+    "p95Us": 3392.05,
+    "p99Us": 3767.54,
+    "rangeUs": 5967.42,
+    "samples": 499
+  },
+  "comparison": {
+    "jitterReduction": 63.7,
+    "rangeReduction": 64.03,
+    "p99Reduction": -49.45
+  },
+  "autoTas": {
+    "cycleUs": 3125,
+    "entries": [
+      {
+        "gateStates": 128,
+        "durationUs": 54.9,
+        "note": "TC7 LiDAR (1 pkt × 2x margin)"
+      },
+      {
+        "gateStates": 0,
+        "durationUs": 1,
+        "note": "guard band"
+      },
+      {
+        "gateStates": 127,
+        "durationUs": 3068.1,
+        "note": "TC0-6 Best Effort"
+      },
+      {
+        "gateStates": 0,
+        "durationUs": 1,
+        "note": "guard band"
+      }
+    ]
+  },
+  "completedAt": "2026-04-10T08:04:10.004Z"
+}
