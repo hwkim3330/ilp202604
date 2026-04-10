@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KETI TSN — How It Works</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #ffffff; --bg2: #f5f5f7; --bg3: #fafafa;
+      --text: #1d1d1f; --text2: #6e6e73; --text3: #aeaeb2;
+      --blue: #007aff; --green: #34c759; --orange: #ff9500; --red: #ff3b30;
+      --indigo: #5856d6; --cyan: #32ade6; --purple: #af52de;
+      --border: rgba(0,0,0,.06);
+      --shadow: 0 2px 12px rgba(0,0,0,.04);
+      --shadow-lg: 0 8px 30px rgba(0,0,0,.06);
+    }
+    body {
+      font-family: 'Inter', -apple-system, system-ui, sans-serif;
+      background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased;
+    }
+
+    /* Nav */
+    .nav {
+      display: flex; align-items: center;
+      padding: 0 24px; height: 48px;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(20px);
+    }
+    .nav-brand { font-size: 0.82rem; font-weight: 700; color: var(--text3); margin-right: 24px; text-decoration: none; }
+    .nav-brand strong { color: var(--text); }
+    .nav-links { display: flex; gap: 2px; }
+    .nav-link {
+      padding: 6px 14px; border-radius: 8px;
+      font-size: 0.72rem; font-weight: 500; color: var(--text3);
+      text-decoration: none; transition: all .15s;
+    }
+    .nav-link:hover { color: var(--text2); background: var(--bg2); }
+    .nav-link.active { color: var(--blue); background: rgba(0,122,255,.06); font-weight: 600; }
+
+    .wrap { max-width: 900px; margin: 0 auto; padding: 60px 24px 100px; }
+
+    /* Hero */
+    .hero { text-align: center; margin-bottom: 64px; }
+    .hero h1 {
+      font-size: 2.8rem; font-weight: 900; letter-spacing: -0.04em; line-height: 1.1;
+      background: linear-gradient(135deg, #1d1d1f, #6e6e73);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero .sub { font-size: 1.05rem; color: var(--text2); margin-top: 16px; line-height: 1.6; }
+    .hero .sub strong { color: var(--text); font-weight: 600; }
+    .hero .highlight {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-top: 20px; padding: 10px 24px; border-radius: 100px;
+      background: rgba(0,122,255,.06); border: 1px solid rgba(0,122,255,.12);
+      font-size: 0.88rem; font-weight: 600; color: var(--blue);
+    }
+
+    /* Section */
+    .section { margin-bottom: 56px; }
+    .section-label {
+      font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--blue); margin-bottom: 8px;
+    }
+    .section h2 {
+      font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 16px;
+    }
+    .section p { font-size: 0.88rem; color: var(--text2); line-height: 1.7; }
+
+    /* Pipeline */
+    .pipeline { display: flex; flex-direction: column; gap: 0; margin: 32px 0; }
+    .pipe-step {
+      display: grid; grid-template-columns: 80px 1fr; gap: 0;
+      position: relative;
+    }
+    .pipe-left {
+      display: flex; flex-direction: column; align-items: center;
+      padding-top: 4px;
+    }
+    .pipe-num {
+      width: 40px; height: 40px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.82rem; font-weight: 800; color: #fff;
+      flex-shrink: 0; z-index: 1;
+    }
+    .pipe-line {
+      width: 2px; flex: 1; margin-top: 4px;
+    }
+    .pipe-step:last-child .pipe-line { display: none; }
+    .pipe-right {
+      padding: 0 0 32px 0;
+    }
+    .pipe-title { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+    .pipe-desc { font-size: 0.82rem; color: var(--text2); line-height: 1.6; }
+    .pipe-time {
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-top: 8px; padding: 3px 10px; border-radius: 6px;
+      font-size: 0.68rem; font-weight: 700;
+    }
+    .pipe-detail {
+      margin-top: 12px; padding: 16px 20px;
+      background: var(--bg2); border-radius: 12px;
+      font-size: 0.78rem; line-height: 1.7; color: var(--text2);
+    }
+    .pipe-detail code {
+      background: rgba(0,0,0,.05); padding: 1px 6px; border-radius: 4px;
+      font-size: 0.72rem; font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* Metric cards */
+    .metrics {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+      margin: 24px 0;
+    }
+    @media (max-width: 700px) { .metrics { grid-template-columns: 1fr 1fr; } }
+    .metric {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px;
+      text-align: center;
+    }
+    .metric-val {
+      font-size: 1.8rem; font-weight: 900; letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .metric-unit { font-size: 0.7rem; font-weight: 500; color: var(--text3); }
+    .metric-label { font-size: 0.65rem; color: var(--text3); margin-top: 6px; font-weight: 500; }
+    .metric.live { border-color: rgba(0,122,255,.15); background: rgba(0,122,255,.03); }
+
+    /* TAS diagram */
+    .tas-diagram {
+      margin: 24px 0; padding: 24px;
+      background: var(--bg2); border-radius: 16px; border: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .tas-canvas { width: 100%; height: 120px; }
+
+    /* Formula */
+    .formula {
+      margin: 16px 0; padding: 20px 24px;
+      background: var(--bg3); border-left: 3px solid var(--blue);
+      border-radius: 0 12px 12px 0;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.78rem; line-height: 2; color: var(--text2);
+    }
+    .formula strong { color: var(--text); }
+
+    /* Table */
+    .data-table {
+      width: 100%; border-collapse: collapse;
+      margin: 16px 0; font-size: 0.78rem;
+    }
+    .data-table th {
+      text-align: left; padding: 10px 16px;
+      font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text3);
+      border-bottom: 2px solid var(--border);
+    }
+    .data-table td {
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      color: var(--text2);
+    }
+    .data-table td:nth-child(2) {
+      font-weight: 700; color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+
+    /* Captures */
+    .capture-list {
+      display: flex; flex-direction: column; gap: 8px;
+      margin: 16px 0;
+    }
+    .capture-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 20px; background: var(--bg2);
+      border-radius: 12px; border: 1px solid var(--border);
+      font-size: 0.78rem;
+    }
+    .capture-item .fname { font-weight: 600; font-family: 'SF Mono', monospace; font-size: 0.72rem; }
+    .capture-item .meta { color: var(--text3); font-size: 0.68rem; }
+    .capture-btn {
+      padding: 5px 14px; border-radius: 8px; border: none;
+      background: var(--blue); color: #fff;
+      font-size: 0.68rem; font-weight: 600; cursor: pointer;
+      font-family: inherit;
+    }
+    .capture-btn:hover { opacity: .85; }
+    .capture-btn.secondary { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+
+    /* Timeline bar */
+    .timeline {
+      display: flex; align-items: stretch; height: 56px;
+      border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border); margin: 24px 0;
+    }
+    .tl-seg {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 4px 8px; position: relative;
+    }
+    .tl-seg .tl-val { font-size: 0.88rem; font-weight: 800; line-height: 1; }
+    .tl-seg .tl-label { font-size: 0.55rem; font-weight: 600; margin-top: 2px; }
+
+    /* Footer */
+    .footer { text-align: center; color: var(--text3); font-size: 0.72rem; margin-top: 40px; }
+    .footer a { color: var(--blue); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="/" class="nav-brand"><strong>KETI</strong> TSN</a>
+    <div class="nav-links">
+      <a href="/" class="nav-link">Home</a>
+      <a href="lidar-timing.html" class="nav-link">Timing</a>
+      <a href="lidar-app.html" class="nav-link">Detection</a>
+      <a href="dashboard.html" class="nav-link">Dashboard</a>
+      <a href="solver.html" class="nav-link">Solver</a>
+      <a href="board.html" class="nav-link">Board</a>
+      <a href="how-it-works.html" class="nav-link active">How It Works</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <!-- Hero -->
+    <div class="hero">
+      <h1>How It Works</h1>
+      <div class="sub">
+        LiDAR 트래픽을 <strong>실시간 분석</strong>하여<br>
+        TSN 스위치의 <strong>TAS 설정을 자동 생성</strong>하고 적용합니다
+      </div>
+      <div class="highlight">
+        LiDAR 켜고 약 10초면 TAS 적용 완료
+      </div>
+    </div>
+
+    <!-- Pipeline -->
+    <div class="section">
+      <div class="section-label">Pipeline</div>
+      <h2>5-Step Automated Flow</h2>
+      <p>서버가 LiDAR 패킷을 수신하는 즉시 타이밍 분석을 시작합니다. 별도 설정 없이 패킷 패턴에서 최적 TAS를 자동 도출합니다.</p>
+
+      <div class="pipeline" style="margin-top:32px">
+        <!-- Step 1 -->
+        <div class="pipe-step">
+          <div class="pipe-left">
+            <div class="pipe-num" style="background:var(--cyan);">1</div>
+            <div class="pipe-line" style="background:linear-gradient(var(--cyan),var(--blue));"></div>
+          </div>
+          <div class="pipe-right">
+            <div class="pipe-title">LiDAR Packet Reception</div>
+            <div class="pipe-desc">
+              Ouster OS-1-16이 UDP 패킷을 전송합니다. LAN9662 스위치를 통과하여 서버에 도착합니다.
+            </div>
+            <div class="pipe-time" style="background:rgba(50,173,230,.08); color:var(--cyan);">즉시</div>
+            <div class="pipe-detail">
+              <strong>패킷 구조:</strong> 3,392 bytes = 16 columns &times; 212 bytes (LEGACY format)<br>
+              <strong>전송 패턴:</strong> 32 packets/frame &times; 10 fps = 320 packets/sec<br>
+              <strong>패킷 간격:</strong> 100,000 &micro;s &divide; 32 = <code>3,125 &micro;s</code><br>
+              <strong>대역폭:</strong> 3,392 &times; 320 &times; 8 = <code>8.68 Mbps</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="pipe-step">
+          <div class="pipe-left">
+            <div class="pipe-num" style="background:var(--blue);">2</div>
+            <div class="pipe-line" style="background:linear-gradient(var(--blue),var(--indigo));"></div>
+          </div>
+          <div class="pipe-right">
+            <div class="pipe-title">Timestamp &amp; Profiling</div>
+            <div class="pipe-desc">
+              서버가 각 패킷의 도착 시간을 <code>process.hrtime.bigint()</code>로 기록합니다.
+              나노초 정밀도의 타임스탬프를 슬라이딩 윈도우에 축적합니다.
+            </div>
+            <div class="pipe-time" style="background:rgba(0,122,255,.08); color:var(--blue);">0.5초 ~ 10초</div>
+            <div class="pipe-detail">
+              <strong>패킷 버퍼:</strong> 최근 500개 (약 1.56초 분량)<br>
+              <strong>프레임 버퍼:</strong> 최근 100개 (약 10초 분량)<br>
+              <strong>최소 데이터:</strong> 5프레임 (0.5초) 후 프로파일 생성 가능<br>
+              <strong>안정 상태:</strong> 100프레임 (10초) 후 통계 수렴
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="pipe-step">
+          <div class="pipe-left">
+            <div class="pipe-num" style="background:var(--indigo);">3</div>
+            <div class="pipe-line" style="background:linear-gradient(var(--indigo),var(--green));"></div>
+          </div>
+          <div class="pipe-right">
+            <div class="pipe-title">Auto TAS Derivation</div>
+            <div class="pipe-desc">
+              측정된 패킷 간격에서 TAS 사이클을 도출합니다. 와이어 타임에 마진을 곱해 TC7 슬롯을 계산합니다.
+            </div>
+            <div class="pipe-time" style="background:rgba(88,86,214,.08); color:var(--indigo);">자동 (1초마다 갱신)</div>
+            <div class="formula">
+              <strong>cycle</strong> = round(pkt_interval, 10&micro;s) = round(3125, 10) = <strong>3,130 &micro;s</strong><br>
+              <strong>wire_time</strong> = (3392 + 20 + 14 + 4) &times; 8 / 1000 = <strong>27.44 &micro;s</strong><br>
+              <strong>TC7_slot</strong> = wire_time &times; 2.0 (margin) = <strong>54.9 &micro;s</strong><br>
+              <strong>BE_slot</strong> = cycle - TC7 - guards = 3130 - 54.9 - 2 = <strong>3,073.1 &micro;s</strong><br>
+              <strong>utilization</strong> = 54.9 / 3130 = <strong>1.75%</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="pipe-step">
+          <div class="pipe-left">
+            <div class="pipe-num" style="background:var(--green);">4</div>
+            <div class="pipe-line" style="background:linear-gradient(var(--green),var(--orange));"></div>
+          </div>
+          <div class="pipe-right">
+            <div class="pipe-title">WebSocket Streaming</div>
+            <div class="pipe-desc">
+              프로파일과 auto-TAS를 1초 간격으로 브라우저에 스트리밍합니다.
+              Timing 페이지에서 오실로스코프, 지터 히스토그램, TAS 오버레이로 시각화됩니다.
+            </div>
+            <div class="pipe-time" style="background:rgba(52,199,89,.08); color:var(--green);">1초마다</div>
+            <div class="pipe-detail">
+              <strong>WS 경로:</strong> <code>/ws/lidar-timing-a</code><br>
+              <strong>메시지 타입:</strong> <code>pkt</code> (매 패킷), <code>profile</code> (10프레임마다)<br>
+              <strong>4개 패널:</strong> Packet Scope, Frame Detail, TAS Gate, Jitter Histogram
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="pipe-step">
+          <div class="pipe-left">
+            <div class="pipe-num" style="background:var(--orange);">5</div>
+            <div class="pipe-line"></div>
+          </div>
+          <div class="pipe-right">
+            <div class="pipe-title">Push to LAN9662</div>
+            <div class="pipe-desc">
+              "Push to Board" 버튼으로 TAS 설정을 스위치에 적용합니다.
+              CoAP iPATCH로 YANG/CBOR 인코딩된 GCL을 전송합니다.
+            </div>
+            <div class="pipe-time" style="background:rgba(255,149,0,.08); color:var(--orange);">~2초</div>
+            <div class="pipe-detail">
+              <strong>프로토콜:</strong> CoAP iPATCH (Ethernet) or Serial (fallback)<br>
+              <strong>인코딩:</strong> YANG &rarr; SID &rarr; CBOR<br>
+              <strong>대상:</strong> <code>/ietf-interfaces:interfaces/interface[name='swp0']/ieee802-dot1q-sched-bridge:gate-parameters</code><br>
+              <strong>도구:</strong> keti-tsn-cli
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline bar -->
+    <div class="section">
+      <div class="section-label">Timeline</div>
+      <h2>Total Time: ~12 seconds</h2>
+      <p>LiDAR를 켜는 순간부터 스위치에 TAS가 적용되기까지의 시간입니다.</p>
+
+      <div class="timeline">
+        <div class="tl-seg" style="flex:1; background:rgba(50,173,230,.08); color:var(--cyan);">
+          <div class="tl-val">0s</div>
+          <div class="tl-label">Start</div>
+        </div>
+        <div class="tl-seg" style="flex:1; background:rgba(0,122,255,.06); color:var(--blue);">
+          <div class="tl-val">0.5s</div>
+          <div class="tl-label">Min Profile</div>
+        </div>
+        <div class="tl-seg" style="flex:16; background:rgba(88,86,214,.06); color:var(--indigo);">
+          <div class="tl-val">10s</div>
+          <div class="tl-label">Stable Statistics (100 frames)</div>
+        </div>
+        <div class="tl-seg" style="flex:4; background:rgba(255,149,0,.08); color:var(--orange);">
+          <div class="tl-val">~2s</div>
+          <div class="tl-label">Board Push</div>
+        </div>
+        <div class="tl-seg" style="flex:1; background:rgba(52,199,89,.08); color:var(--green);">
+          <div class="tl-val">&#10003;</div>
+          <div class="tl-label">Done</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAS Diagram -->
+    <div class="section">
+      <div class="section-label">Result</div>
+      <h2>Auto-Generated TAS Schedule</h2>
+      <p>1 사이클(3,130 &micro;s) 안에 LiDAR 패킷 1개가 정확히 들어맞도록 설계됩니다.</p>
+
+      <div class="tas-diagram">
+        <canvas class="tas-canvas" id="tasCanvas"></canvas>
+      </div>
+
+      <div class="metrics" id="metricsLive">
+        <div class="metric live">
+          <div class="metric-val" id="mCycle">3,130<span class="metric-unit"> &micro;s</span></div>
+          <div class="metric-label">TAS Cycle</div>
+        </div>
+        <div class="metric live">
+          <div class="metric-val" id="mTc7">54.9<span class="metric-unit"> &micro;s</span></div>
+          <div class="metric-label">TC7 Slot (LiDAR)</div>
+        </div>
+        <div class="metric live">
+          <div class="metric-val" id="mUtil">1.75<span class="metric-unit"> %</span></div>
+          <div class="metric-label">Utilization</div>
+        </div>
+        <div class="metric live">
+          <div class="metric-val" id="mBw">8.68<span class="metric-unit"> Mbps</span></div>
+          <div class="metric-label">Bandwidth</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Measured values -->
+    <div class="section">
+      <div class="section-label">Measured Data</div>
+      <h2>Ouster OS-1-16 Real Measurements</h2>
+      <p>실제 LiDAR에서 측정한 값입니다. 서버가 실행 중이면 실시간 값으로 갱신됩니다.</p>
+
+      <table class="data-table" id="dataTable">
+        <thead>
+          <tr><th>Metric</th><th>Value</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Packet Size</td><td id="dPktSize">3,392 B</td><td>16 cols &times; 212 B (LEGACY format)</td></tr>
+          <tr><td>Packets/Frame</td><td id="dPktsFrame">32</td><td>512 cols / 16 cols per packet</td></tr>
+          <tr><td>Frame Rate</td><td id="dFps">10 Hz</td><td>100,000 &micro;s period</td></tr>
+          <tr><td>Packet Interval</td><td id="dPktInt">3,125 &micro;s</td><td>= frame period / pkts_per_frame</td></tr>
+          <tr><td>Packet Jitter (&sigma;)</td><td id="dPktJit">103 &micro;s</td><td>Inter-packet interval std dev</td></tr>
+          <tr><td>Frame Interval</td><td id="dFrameInt">100,008 &micro;s</td><td>Average frame-to-frame</td></tr>
+          <tr><td>Frame Jitter (&sigma;)</td><td id="dFrameJit">197 &micro;s</td><td>Frame interval std dev</td></tr>
+          <tr><td>Bandwidth</td><td id="dBw">8.68 Mbps</td><td>pkt_size &times; pkts/frame &times; fps &times; 8</td></tr>
+          <tr><td>Wire Time</td><td id="dWire">27.44 &micro;s</td><td>(3392+38) &times; 8 / 1000 Mbps</td></tr>
+          <tr><td>TAS Cycle</td><td id="dCycle">3,130 &micro;s</td><td>Rounded from packet interval</td></tr>
+          <tr><td>TC7 Slot</td><td id="dTc7">54.9 &micro;s</td><td>Wire time &times; 2&times; margin</td></tr>
+          <tr><td>Utilization</td><td id="dUtil">1.75%</td><td>TC7 / cycle</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Captures -->
+    <div class="section">
+      <div class="section-label">Captures</div>
+      <h2>Saved Timing Snapshots</h2>
+      <p>캡처된 실측 데이터입니다. 새 캡처를 저장하거나 기존 데이터를 다운로드할 수 있습니다.</p>
+
+      <div style="margin:16px 0;">
+        <button class="capture-btn" id="captureBtn" onclick="captureNow()">Capture Now</button>
+        <button class="capture-btn secondary" onclick="loadCaptures()" style="margin-left:8px;">Refresh</button>
+      </div>
+      <div class="capture-list" id="captureList">
+        <div class="capture-item"><span class="meta">Loading...</span></div>
+      </div>
+    </div>
+
+    <!-- API -->
+    <div class="section">
+      <div class="section-label">API Reference</div>
+      <h2>REST &amp; WebSocket Endpoints</h2>
+
+      <table class="data-table">
+        <thead><tr><th>Method</th><th>Endpoint</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>GET</td><td>/api/lidar/profile/:id</td><td>실시간 트래픽 프로파일 (100프레임 통계)</td></tr>
+          <tr><td>GET</td><td>/api/lidar/auto-tas/:id</td><td>자동 도출 TAS 설정 + 패킷 분석</td></tr>
+          <tr><td>POST</td><td>/api/lidar/capture/:id</td><td>현재 타이밍 스냅샷 &rarr; data/ 저장</td></tr>
+          <tr><td>GET</td><td>/api/lidar/captures</td><td>저장된 캡처 목록</td></tr>
+          <tr><td>GET</td><td>/api/lidar/captures/:file</td><td>캡처 파일 조회</td></tr>
+          <tr><td>WS</td><td>/ws/lidar-timing-a</td><td>패킷 타이밍 + 프로파일 실시간 스트림</td></tr>
+          <tr><td>POST</td><td>/api/gcl/push-port</td><td>TAS 설정 보드 적용 (CoAP iPATCH)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      KETI &middot; TSN Platform &middot;
+      <a href="https://github.com/hwkim3330/ilp202604">GitHub</a> &middot;
+      <a href="lidar-timing.html">Go to Timing Page &rarr;</a>
+    </div>
+  </div>
+
+  <script>
+    // Draw TAS diagram
+    function drawTas(canvas, tas) {
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      const cycle = tas?.cycleUs || 3130;
+      const entries = tas?.entries || [
+        { gateStates: 128, durationUs: 54.9, note: 'TC7 LiDAR' },
+        { gateStates: 0, durationUs: 1, note: 'guard' },
+        { gateStates: 127, durationUs: 3073.1, note: 'BE' },
+        { gateStates: 0, durationUs: 1, note: 'guard' },
+      ];
+
+      const pad = { l: 60, r: 20, t: 20, b: 35 };
+      const bw = w - pad.l - pad.r;
+      const bh = h - pad.t - pad.b;
+
+      const colors = {
+        128: '#007aff', 127: '#34c759', 0: '#aeaeb2',
+      };
+      const labels = {
+        128: 'TC7 (LiDAR)', 127: 'TC0-6 (Best Effort)', 0: 'Guard',
+      };
+
+      // Draw entries
+      let x = pad.l;
+      for (const e of entries) {
+        const ew = (e.durationUs / cycle) * bw;
+        const col = colors[e.gateStates] || '#6e6e73';
+
+        ctx.fillStyle = col;
+        ctx.globalAlpha = e.gateStates === 0 ? 0.3 : 0.15;
+        ctx.fillRect(x, pad.t, ew, bh);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = col;
+        ctx.fillRect(x, pad.t, ew, 4);
+
+        // Label (only if wide enough)
+        if (ew > 40) {
+          ctx.fillStyle = col;
+          ctx.font = '600 11px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(labels[e.gateStates] || '', x + ew/2, pad.t + bh/2 - 4);
+          ctx.font = '700 13px Inter, sans-serif';
+          ctx.fillText(e.durationUs + ' \u00b5s', x + ew/2, pad.t + bh/2 + 14);
+        }
+
+        x += ew;
+      }
+
+      // Y axis label
+      ctx.save();
+      ctx.translate(16, pad.t + bh/2);
+      ctx.rotate(-Math.PI/2);
+      ctx.fillStyle = '#aeaeb2';
+      ctx.font = '600 10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Gate State', 0, 0);
+      ctx.restore();
+
+      // X axis
+      ctx.fillStyle = '#aeaeb2';
+      ctx.font = '500 10px Inter, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('0', pad.l, h - 10);
+      ctx.textAlign = 'right';
+      ctx.fillText(cycle + ' \u00b5s (1 cycle)', pad.l + bw, h - 10);
+      ctx.textAlign = 'center';
+      ctx.fillText('Time', pad.l + bw/2, h - 10);
+
+      // Border
+      ctx.strokeStyle = 'rgba(0,0,0,.06)';
+      ctx.strokeRect(pad.l, pad.t, bw, bh);
+    }
+
+    // Load live data
+    async function loadLive() {
+      try {
+        const [profRes, tasRes] = await Promise.all([
+          fetch('/api/lidar/profile/lidar-a'),
+          fetch('/api/lidar/auto-tas/lidar-a'),
+        ]);
+        const prof = await profRes.json();
+        const tas = await tasRes.json();
+        if (prof.error || tas.error) return;
+
+        // Update metrics
+        document.getElementById('mCycle').innerHTML = tas.cycleUs.toLocaleString() + '<span class="metric-unit"> \u00b5s</span>';
+        document.getElementById('mTc7').innerHTML = tas.entries[0].durationUs + '<span class="metric-unit"> \u00b5s</span>';
+        document.getElementById('mUtil').innerHTML = tas.utilization + '<span class="metric-unit"> %</span>';
+        document.getElementById('mBw').innerHTML = prof.bandwidthMbps + '<span class="metric-unit"> Mbps</span>';
+
+        // Update table
+        const pa = tas.packetAnalysis;
+        document.getElementById('dPktSize').textContent = prof.pktSize.toLocaleString() + ' B';
+        document.getElementById('dPktsFrame').textContent = prof.pktsPerFrame;
+        document.getElementById('dFps').textContent = prof.fps + ' Hz';
+        document.getElementById('dPktInt').textContent = pa.pktIntervalUs.toLocaleString() + ' \u00b5s';
+        document.getElementById('dPktJit').textContent = pa.pktJitterUs + ' \u00b5s';
+        document.getElementById('dFrameInt').textContent = prof.frameIntervalUs.toLocaleString() + ' \u00b5s';
+        document.getElementById('dFrameJit').textContent = prof.jitterUs + ' \u00b5s';
+        document.getElementById('dBw').textContent = prof.bandwidthMbps + ' Mbps';
+        document.getElementById('dWire').textContent = pa.pktTxUs + ' \u00b5s';
+        document.getElementById('dCycle').textContent = tas.cycleUs.toLocaleString() + ' \u00b5s';
+        document.getElementById('dTc7').textContent = tas.entries[0].durationUs + ' \u00b5s';
+        document.getElementById('dUtil').textContent = tas.utilization + '%';
+
+        drawTas(document.getElementById('tasCanvas'), tas);
+      } catch {
+        drawTas(document.getElementById('tasCanvas'), null);
+      }
+    }
+
+    // Load captures
+    async function loadCaptures() {
+      const list = document.getElementById('captureList');
+      try {
+        const res = await fetch('/api/lidar/captures');
+        const files = await res.json();
+        if (files.length === 0) {
+          list.innerHTML = '<div class="capture-item"><span class="meta">No captures yet. Click "Capture Now" to save current timing data.</span></div>';
+          return;
+        }
+        list.innerHTML = files.map(f => {
+          const ts = f.replace('lidar-capture-', '').replace('.json', '').replace(/T/, ' ').replace(/-/g, (m, i) => i > 9 ? ':' : '-');
+          return `<div class="capture-item">
+            <div>
+              <div class="fname">${f}</div>
+              <div class="meta">${ts}</div>
+            </div>
+            <a href="/api/lidar/captures/${f}" target="_blank" class="capture-btn secondary">View JSON</a>
+          </div>`;
+        }).join('');
+      } catch {
+        list.innerHTML = '<div class="capture-item"><span class="meta">Server offline</span></div>';
+      }
+    }
+
+    // Capture now
+    async function captureNow() {
+      const btn = document.getElementById('captureBtn');
+      btn.textContent = 'Capturing...';
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/lidar/capture/lidar-a', { method: 'POST' });
+        const data = await res.json();
+        if (data.saved) {
+          btn.textContent = 'Saved!';
+          loadCaptures();
+        } else {
+          btn.textContent = data.error || 'Failed';
+        }
+      } catch {
+        btn.textContent = 'Error';
+      }
+      setTimeout(() => { btn.textContent = 'Capture Now'; btn.disabled = false; }, 2000);
+    }
+
+    // Init
+    loadLive();
+    loadCaptures();
+    setInterval(loadLive, 3000);
+  </script>
+</body>
+</html>

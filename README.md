@@ -52,6 +52,7 @@ ping 192.168.1.10                                          # Verify
 | **Solver** | `/solver.html` | Greedy/ILP GCL 스케줄러 |
 | **Board** | `/board.html` | TAS 설정 읽기/편집 + Quick Profiles |
 | **Cloud** | `/lidar.html` | Raw 3D 포인트 클라우드 |
+| **How It Works** | `/how-it-works.html` | 파이프라인 설명 + 실측 데이터 + 캡처 |
 
 ## Architecture
 
@@ -116,6 +117,7 @@ ilp202604/
 ├── solver.html             # GCL solver (Greedy + ILP)
 ├── board.html              # Board TAS config editor
 ├── lidar.html              # Raw 3D point cloud viewer
+├── how-it-works.html       # Pipeline explanation + measured data + captures
 ├── roii.glb                # 3D vehicle topology model
 ├── js/
 │   └── ilp-core.js         # ILP/Greedy solver core
