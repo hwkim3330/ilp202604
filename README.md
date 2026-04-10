@@ -99,6 +99,9 @@ UDP 3,392 B × 32 pkts/frame  ──▶ Port 2                      Port 1 ◀�
 | GET | `/api/lidar/stats` | All LiDAR streaming stats |
 | GET | `/api/lidar/profile/:id` | Traffic timing profile (µs) |
 | GET | `/api/lidar/auto-tas/:id` | Auto-generated TAS config |
+| POST | `/api/lidar/capture/:id` | Snapshot timing data → `data/` JSON |
+| GET | `/api/lidar/captures` | List saved capture files |
+| GET | `/api/lidar/captures/:file` | Retrieve saved capture |
 | WS | `/ws/lidar-a` | Point cloud stream (Float32Array) |
 | WS | `/ws/lidar-timing-a` | Packet timing + profile stream |
 
@@ -124,6 +127,9 @@ ilp202604/
 │   ├── board-api.js        # Board REST API (per-board routing)
 │   ├── gcl-to-yang.js      # GCL → YANG/CBOR converter
 │   └── lidar-proxy.js      # UDP→WS proxy + traffic profiling + auto TAS
+├── data/
+│   ├── README.md           # Capture format + measured values documentation
+│   └── lidar-capture-*.json  # Saved timing snapshots (real measurements)
 ├── keti-tsn-cli/           # Board CLI tool (git submodule)
 │   ├── bin/keti-tsn.js     # CLI entry point
 │   ├── setup/              # YAML configs (IP, no-sec, save, reboot)
