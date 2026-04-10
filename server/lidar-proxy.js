@@ -338,11 +338,37 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
     console.log(`  LiDAR [${id}]: UDP :${udpPort} → WebSocket ${wsPaths.join(', ')}`);
   });
 
+  /**
+   * Snapshot current packet timing data for capture/export
+   */
+  function getTimingSnapshot() {
+    if (pktTimestamps.length < 10) return null;
+    // Compute relative timestamps (offset from first)
+    const t0 = pktTimestamps[0];
+    const relTimestamps = pktTimestamps.map(t => Math.round((t - t0) * 100) / 100);
+
+    // Per-packet intervals
+    const intervals = [];
+    for (let i = 1; i < pktTimestamps.length; i++) {
+      intervals.push(Math.round((pktTimestamps[i] - pktTimestamps[i - 1]) * 100) / 100);
+    }
+
+    return {
+      count: pktTimestamps.length,
+      timestamps_us: relTimestamps,
+      intervals_us: intervals,
+      frameIntervals_us: frameTimestamps.length > 1
+        ? frameTimestamps.slice(1).map((t, i) => Math.round((t - frameTimestamps[i]) * 100) / 100)
+        : [],
+    };
+  }
+
   return {
     id,
     getStats: () => ({ ...stats, id, clients: clients.size }),
     getTrafficProfile,
     generateTasConfig,
+    getTimingSnapshot,
   };
 }
 

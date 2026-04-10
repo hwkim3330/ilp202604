@@ -12,6 +12,7 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import boardApi from './board-api.js';
 import { setupLidarProxy } from './lidar-proxy.js';
@@ -75,6 +76,48 @@ app.get('/api/lidar/auto-tas/:id', (req, res) => {
   const config = inst.generateTasConfig(opts);
   if (!config) return res.json({ error: 'Not enough data yet' });
   res.json(config);
+});
+
+// Capture LiDAR timing snapshot → save to data/ directory
+app.post('/api/lidar/capture/:id', (req, res) => {
+  const inst = lidar.instances.find(i => i.id === req.params.id);
+  if (!inst) return res.status(404).json({ error: 'LiDAR not found' });
+  const profile = inst.getTrafficProfile();
+  const tas = inst.generateTasConfig();
+  const timing = inst.getTimingSnapshot();
+  if (!profile || !timing) return res.json({ error: 'Not enough data yet' });
+
+  const capture = {
+    capturedAt: new Date().toISOString(),
+    sensor: 'Ouster OS-1-16 Gen1',
+    lidarId: req.params.id,
+    profile,
+    autoTas: tas,
+    timing,
+  };
+
+  const dataDir = path.join(ROOT, 'data');
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+  const fname = `lidar-capture-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.json`;
+  const fpath = path.join(dataDir, fname);
+  fs.writeFileSync(fpath, JSON.stringify(capture, null, 2));
+
+  res.json({ saved: fname, profile, packets: timing.count });
+});
+
+// List saved captures
+app.get('/api/lidar/captures', (req, res) => {
+  const dataDir = path.join(ROOT, 'data');
+  if (!fs.existsSync(dataDir)) return res.json([]);
+  const files = fs.readdirSync(dataDir).filter(f => f.startsWith('lidar-capture-'));
+  res.json(files);
+});
+
+// Get a saved capture
+app.get('/api/lidar/captures/:file', (req, res) => {
+  const fpath = path.join(ROOT, 'data', req.params.file);
+  if (!fs.existsSync(fpath)) return res.status(404).json({ error: 'Not found' });
+  res.json(JSON.parse(fs.readFileSync(fpath, 'utf8')));
 });
 
 httpServer.listen(port, () => {
