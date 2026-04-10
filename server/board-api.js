@@ -99,17 +99,26 @@ router.get('/board/:boardId/status', async (req, res) => {
   }
 });
 
-/* ── GET /api/boards/status ── All boards status (parallel probe) */
+/* ── GET /api/boards/status ── All boards status (eth → serial fallback) */
 router.get('/boards/status', async (req, res) => {
   const results = await Promise.all(boards.map(async (board) => {
+    // Try ethernet first
     try {
       const args = ['checksum', '--transport', 'eth', '--host', board.host];
       const { stdout } = await ketiTsn(args, 5000);
       const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
-      return { id: board.id, connected, host: board.host, label: board.label };
-    } catch (e) {
-      return { id: board.id, connected: false, host: board.host, label: board.label, error: e.message };
+      if (connected) return { id: board.id, connected: true, host: board.host, label: board.label, transport: 'eth' };
+    } catch {}
+    // Fallback to serial (only for first board)
+    if (board.id === boards[0]?.id && fs.existsSync('/dev/ttyACM0')) {
+      try {
+        const args = ['checksum', '--transport', 'serial', '--port', '/dev/ttyACM0'];
+        const { stdout } = await ketiTsn(args, 5000);
+        const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
+        if (connected) return { id: board.id, connected: true, host: board.host, label: board.label, transport: 'serial' };
+      } catch {}
     }
+    return { id: board.id, connected: false, host: board.host, label: board.label };
   }));
   res.json(results);
 });
@@ -409,10 +418,22 @@ router.post('/gcl/push-port', async (req, res) => {
     const tmpFile = path.join(os.tmpdir(), `tas-port${port}-${Date.now()}.yaml`);
     fs.writeFileSync(tmpFile, yamlStr);
 
-    const args = transport === 'serial'
+    let args = transport === 'serial'
       ? ['patch', tmpFile, '-d', device, '--transport', 'serial']
       : ['patch', tmpFile, '--transport', transport, '--host', host];
-    const { stdout, stderr } = await ketiTsn(args);
+
+    let stdout, stderr;
+    try {
+      ({ stdout, stderr } = await ketiTsn(args));
+    } catch (ethErr) {
+      // Fallback to serial if eth fails
+      if (transport !== 'serial' && fs.existsSync(device)) {
+        args = ['patch', tmpFile, '-d', device, '--transport', 'serial'];
+        ({ stdout, stderr } = await ketiTsn(args));
+      } else {
+        throw ethErr;
+      }
+    }
     fs.unlinkSync(tmpFile);
 
     const output = stdout + stderr;
