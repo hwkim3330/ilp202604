@@ -84,7 +84,7 @@ app.post('/api/lidar/benchmark/:id', async (req, res) => {
   if (!inst) return res.status(404).json({ error: 'LiDAR not found' });
 
   const boardId = req.body.boardId || 'SW_REAR';
-  const portNum = req.body.port || 'swp0';
+  const portNum = req.body.port || '1';
   const transport = req.body.transport || 'eth';
   const board = boards.find(b => b.id === boardId);
   if (!board) return res.status(404).json({ error: `Board not found: ${boardId}` });
