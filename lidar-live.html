@@ -230,7 +230,7 @@
     <!-- Timing canvases -->
     <div class="timing-canvases">
       <div class="tc-cell">
-        <div class="tc-label">Packet Arrivals — 500 ms window</div>
+        <div class="tc-label">Packet Interval — last 200 packets (expected: 3,125 µs)</div>
         <canvas id="cScope"></canvas>
       </div>
       <div class="tc-cell">
@@ -569,17 +569,69 @@ function getCtx(id) {
 
 function drawScope() {
   const { x, w, h } = getCtx('cScope'); x.clearRect(0, 0, w, h);
-  if (timingPkts.length < 2) return;
-  const winUs = 500000, now = timingPkts[timingPkts.length - 1].t, start = now - winUs;
-  const top = 18, bot = 12;
-  let toggle = false;
-  for (const p of timingPkts) { if (p.t < start) continue; if (p.newFrame) toggle = !toggle;
-    if (toggle) { const px = (p.t - start) / winUs * w; x.fillStyle = 'rgba(10,132,255,.06)'; x.fillRect(px, top, 2, h - top - bot); } }
-  for (const p of timingPkts) { if (p.t < start) continue; const px = (p.t - start) / winUs * w; const int = Math.min(1, p.pts / 16);
-    if (p.newFrame) { x.strokeStyle = 'rgba(100,210,255,.15)'; x.lineWidth = 0.5; x.beginPath(); x.moveTo(px, top); x.lineTo(px, h - bot); x.stroke(); }
-    const bh = 4 + int * (h - top - bot - 8); x.fillStyle = `rgba(10,132,255,${0.2 + int * 0.6})`; x.fillRect(px, h - bot - bh, 1.5, bh); }
-  x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '8px Inter';
-  for (let i = 0; i <= 5; i++) x.fillText(`${i * 100} ms`, (i / 5) * w + 2, h - 1);
+  if (timingPkts.length < 10) return;
+
+  // Compute recent intervals
+  const N = 200;
+  const start = Math.max(0, timingPkts.length - N - 1);
+  const ints = [];
+  for (let i = start + 1; i < timingPkts.length; i++) {
+    ints.push(timingPkts[i].t - timingPkts[i-1].t);
+  }
+  if (ints.length < 5) return;
+
+  const top = 18, bot = 14, left = 40, right = 8;
+  const pw = w - left - right, ph = h - top - bot;
+  const expected = profile ? profile.pktIntervalUs : 3125;
+
+  // Auto-scale Y: center on expected, show ±range
+  const maxDev = Math.max(...ints.map(v => Math.abs(v - expected)), 50);
+  const yMin = expected - maxDev * 1.2;
+  const yMax = expected + maxDev * 1.2;
+  const toY = (v) => top + (1 - (v - yMin) / (yMax - yMin)) * ph;
+
+  // Expected line
+  const ey = toY(expected);
+  x.strokeStyle = 'rgba(10,132,255,.3)';
+  x.lineWidth = 1; x.setLineDash([4, 3]);
+  x.beginPath(); x.moveTo(left, ey); x.lineTo(left + pw, ey); x.stroke();
+  x.setLineDash([]);
+
+  // ±σ band if profile
+  if (profile) {
+    const jit = profile.jitterUs || 0;
+    const y1 = toY(expected + jit), y2 = toY(expected - jit);
+    x.fillStyle = 'rgba(10,132,255,.04)';
+    x.fillRect(left, y1, pw, y2 - y1);
+  }
+
+  // Scatter dots
+  for (let i = 0; i < ints.length; i++) {
+    const px = left + (i / (ints.length - 1)) * pw;
+    const py = toY(ints[i]);
+    const dev = Math.abs(ints[i] - expected);
+    const color = dev < 50 ? 'rgba(48,209,88,.7)' : dev < 200 ? 'rgba(255,214,10,.7)' : 'rgba(255,69,58,.8)';
+    x.fillStyle = color;
+    x.beginPath(); x.arc(px, py, dev < 50 ? 2 : 3, 0, Math.PI * 2); x.fill();
+  }
+
+  // Y axis labels
+  x.fillStyle = 'rgba(255,255,255,.2)'; x.font = '7px Inter'; x.textAlign = 'right';
+  const steps = 5;
+  for (let i = 0; i <= steps; i++) {
+    const v = yMin + (yMax - yMin) * (1 - i / steps);
+    x.fillText(`${Math.round(v)}`, left - 3, top + (i / steps) * ph + 3);
+  }
+  x.textAlign = 'left';
+
+  // Expected label
+  x.fillStyle = 'rgba(10,132,255,.5)'; x.font = '7px Inter';
+  x.fillText(`${expected} µs`, left + 3, ey - 4);
+
+  // X axis
+  x.fillStyle = 'rgba(255,255,255,.12)'; x.font = '7px Inter';
+  x.fillText('µs', 2, top + 8);
+  x.fillText(`${ints.length} pkts`, left + pw - 30, h - 2);
 }
 
 function drawJitter() {
