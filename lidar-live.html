@@ -590,6 +590,26 @@ window.captureSnapshot = async () => {
   } catch (e) { showToast(e.message, 'err'); }
 };
 
+async function autoReadGcl() {
+  const boardId = document.getElementById('boardSel').value;
+  if (!boardId || !boardStatus[boardId]) return;
+  try {
+    const r = await fetch(`/api/board/${boardId}/gcl`);
+    const d = await r.json();
+    if (d.error || !d.ports) return;
+    // Show board GCL in editor if in auto mode and board has TAS
+    for (const [pn, pd] of Object.entries(d.ports)) {
+      if (!pd.gateEnabled) continue;
+      const entries = pd.adminEntries || pd.operEntries || [];
+      if (!entries.length) continue;
+      const cycleNs = pd.adminCycleTime?.numerator || pd.operCycleTime?.numerator || 0;
+      showToast(`Board P${pn}: gate ON, ${entries.length} entries, cycle ${(cycleNs/1000).toFixed(0)}µs`, 'ok');
+      return;
+    }
+    showToast(`Board ${boardId}: no TAS configured`, 'ok');
+  } catch {}
+}
+
 function showToast(msg, type) {
   const t = document.createElement('div'); t.className = `toast toast-${type}`; t.textContent = msg;
   document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
@@ -605,7 +625,7 @@ async function init() {
 
   const bs = document.getElementById('boardSel');
   config.boards.forEach(b => { const o = document.createElement('option'); o.value = b.id; o.textContent = `${b.id} (${b.host})`; bs.appendChild(o); });
-  bs.addEventListener('change', () => { upPush(); checkBoards(); });
+  bs.addEventListener('change', () => { upPush(); checkBoards(); autoReadGcl(); });
 
   renderTopo();
   checkBoards();

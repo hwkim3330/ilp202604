@@ -68,10 +68,18 @@ step 3 "Applying CoAP no-sec mode..."
 result=$($CLI patch keti-tsn-cli/setup/no-sec.yaml --transport serial --port $SERIAL 2>&1 || true)
 if echo "$result" | grep -q "Success: 1"; then
   ok "no-sec applied"
-else
-  # Maybe already in no-sec, try anyway
-  echo "$result" | tail -3
-  wait_msg "Continuing anyway..."
+elif echo "$result" | grep -q "Failed"; then
+  # Might already be no-sec — verify with ethernet checksum
+  wait_msg "Patch failed (maybe already no-sec), checking ethernet..."
+  sleep 2
+  eth_check=$($CLI checksum --transport eth --host $BOARD_IP 2>&1 || true)
+  if echo "$eth_check" | grep -q "Received checksum"; then
+    ok "Already no-sec (ethernet works)"
+  else
+    fail "no-sec patch failed and ethernet doesn't work"
+    echo "$result" | tail -3
+    exit 1
+  fi
 fi
 
 # Step 4: Save config to flash
