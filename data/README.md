@@ -124,6 +124,6 @@ curl http://localhost:3000/api/lidar/auto-tas/lidar-a
 | Frame jitter (σ) | 197 µs | min 99,548 ~ max 100,530 µs |
 | Bandwidth | 8.68 Mbps | 3,392 × 32 × 10 × 8 / 1e6 |
 | Wire time | 27.44 µs | (3,392 + 38) × 8 / 1,000 Mbps |
-| TAS cycle | 3,130 µs | 패킷 간격 → 10µs 단위 반올림 |
+| TAS cycle | 3,125 µs | = 패킷 간격 (반올림 없음, ±5µs lock) |
 | TC7 slot | 54.9 µs | wire time × 2x margin |
-| TC7 utilization | 1.75% | 54.9 / 3,130 |
+| TC7 utilization | 1.76% | 54.9 / 3,125 |

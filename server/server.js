@@ -88,7 +88,7 @@ const TAS_PRESETS = [
   {
     id: 'lidar-safe', name: 'LiDAR Safe',
     desc: 'LiDAR TC7 with 4× margin for high-jitter environments',
-    cycleUs: 3150,
+    cycleUs: 3125,
     entries: [
       { gateStates: 128, durationUs: 109.8, note: 'TC7 LiDAR (4× margin)' },
       { gateStates: 0, durationUs: 2, note: 'guard' },
@@ -99,7 +99,7 @@ const TAS_PRESETS = [
   {
     id: 'multi-sensor', name: 'Multi-Sensor',
     desc: 'LiDAR TC7 + Radar TC6 + Camera TC5 + BE',
-    cycleUs: 3150,
+    cycleUs: 3125,
     entries: [
       { gateStates: 128, durationUs: 55, note: 'TC7 LiDAR' },
       { gateStates: 0, durationUs: 1, note: 'guard' },

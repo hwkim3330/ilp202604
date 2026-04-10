@@ -297,11 +297,11 @@
             </div>
             <div class="pipe-time" style="background:rgba(88,86,214,.08); color:var(--indigo);">자동 (1초마다 갱신)</div>
             <div class="formula">
-              <strong>cycle</strong> = round(pkt_interval, 10&micro;s) = round(3125, 10) = <strong>3,130 &micro;s</strong><br>
+              <strong>cycle</strong> = pkt_interval = <strong>3,125 &micro;s</strong> (locked &plusmn;5&micro;s)<br>
               <strong>wire_time</strong> = (3392 + 20 + 14 + 4) &times; 8 / 1000 = <strong>27.44 &micro;s</strong><br>
               <strong>TC7_slot</strong> = wire_time &times; 2.0 (margin) = <strong>54.9 &micro;s</strong><br>
-              <strong>BE_slot</strong> = cycle - TC7 - guards = 3130 - 54.9 - 2 = <strong>3,073.1 &micro;s</strong><br>
-              <strong>utilization</strong> = 54.9 / 3130 = <strong>1.75%</strong>
+              <strong>BE_slot</strong> = cycle - TC7 - guards = 3125 - 54.9 - 2 = <strong>3,068.1 &micro;s</strong><br>
+              <strong>utilization</strong> = 54.9 / 3,125 = <strong>1.76%</strong>
             </div>
           </div>
         </div>
@@ -391,7 +391,7 @@
     <div class="section">
       <div class="section-label">Result</div>
       <h2>Auto-Generated TAS Schedule</h2>
-      <p>1 사이클(3,130 &micro;s) 안에 LiDAR 패킷 1개가 정확히 들어맞도록 설계됩니다.</p>
+      <p>1 사이클(3,125 &micro;s) 안에 LiDAR 패킷 1개가 정확히 들어맞도록 설계됩니다.</p>
 
       <div class="tas-diagram">
         <canvas class="tas-canvas" id="tasCanvas"></canvas>
@@ -399,7 +399,7 @@
 
       <div class="metrics" id="metricsLive">
         <div class="metric live">
-          <div class="metric-val" id="mCycle">3,130<span class="metric-unit"> &micro;s</span></div>
+          <div class="metric-val" id="mCycle">3,125<span class="metric-unit"> &micro;s</span></div>
           <div class="metric-label">TAS Cycle</div>
         </div>
         <div class="metric live">
@@ -437,9 +437,9 @@
           <tr><td>Frame Jitter (&sigma;)</td><td id="dFrameJit">197 &micro;s</td><td>Frame interval std dev</td></tr>
           <tr><td>Bandwidth</td><td id="dBw">8.68 Mbps</td><td>pkt_size &times; pkts/frame &times; fps &times; 8</td></tr>
           <tr><td>Wire Time</td><td id="dWire">27.44 &micro;s</td><td>(3392+38) &times; 8 / 1000 Mbps</td></tr>
-          <tr><td>TAS Cycle</td><td id="dCycle">3,130 &micro;s</td><td>Rounded from packet interval</td></tr>
+          <tr><td>TAS Cycle</td><td id="dCycle">3,125 &micro;s</td><td>Rounded from packet interval</td></tr>
           <tr><td>TC7 Slot</td><td id="dTc7">54.9 &micro;s</td><td>Wire time &times; 2&times; margin</td></tr>
-          <tr><td>Utilization</td><td id="dUtil">1.75%</td><td>TC7 / cycle</td></tr>
+          <tr><td>Utilization</td><td id="dUtil">1.76%</td><td>TC7 / cycle</td></tr>
         </tbody>
       </table>
     </div>
@@ -496,7 +496,7 @@
       ctx.scale(dpr, dpr);
       ctx.clearRect(0, 0, w, h);
 
-      const cycle = tas?.cycleUs || 3130;
+      const cycle = tas?.cycleUs || 3125;
       const entries = tas?.entries || [
         { gateStates: 128, durationUs: 54.9, note: 'TC7 LiDAR' },
         { gateStates: 0, durationUs: 1, note: 'guard' },

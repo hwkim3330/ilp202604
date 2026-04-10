@@ -212,17 +212,13 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
     const marginFactor = opts.marginFactor || 2.0;
 
     // ── Derive cycle from packet pattern ──
-    // Natural cycle = inter-packet interval (1 LiDAR pkt per cycle)
-    // Use ceiling to 10µs to ensure cycle >= packet interval (never truncate)
-    // Then lock: only change if drift exceeds 20µs from last locked value
+    // Cycle = measured packet interval (1 LiDAR pkt per cycle)
+    // Lock value: only change if drift > 5µs to prevent jitter flapping
     const naturalCycleUs = profile.pktIntervalUs;
-    let candidateCycle = Math.ceil(naturalCycleUs / 10) * 10;
-    if (lastLockedCycle > 0 && Math.abs(candidateCycle - lastLockedCycle) <= 20) {
-      candidateCycle = lastLockedCycle; // hold steady
-    } else {
-      lastLockedCycle = candidateCycle; // re-lock on big change
+    if (lastLockedCycle === 0 || Math.abs(naturalCycleUs - lastLockedCycle) > 5) {
+      lastLockedCycle = naturalCycleUs;
     }
-    const cycleUs = opts.cycleUs || candidateCycle;
+    const cycleUs = opts.cycleUs || lastLockedCycle;
 
     // ── Per-packet wire time ──
     const pktBytes = profile.pktSize + 20 + 14 + 4; // IP + Ethernet + FCS

@@ -62,7 +62,7 @@ LiDAR (Ouster OS-1-16)            LAN9662 Switch              Server (Node.js)
 UDP 3,392 B × 32 pkts/frame  ──▶ Port 2                      Port 1 ◀── PC NIC
 10 Hz (100,000 µs period)         │                           │
 3,125 µs packet interval          │  TAS (802.1Qbv)           lidar-proxy.js
-8.68 Mbps                         │  Cycle: 3,130 µs          ├── UDP :7502 → WS /ws/lidar-a
+8.68 Mbps                         │  Cycle: 3,125 µs          ├── UDP :7502 → WS /ws/lidar-a
                                   │  TC7: 54.9 µs (1.75%)     ├── Timing WS /ws/lidar-timing-a
                                   │  BE: 3,073.1 µs           └── Traffic profiling (real-time)
                                   │
@@ -79,7 +79,7 @@ UDP 3,392 B × 32 pkts/frame  ──▶ Port 2                      Port 1 ◀�
 1. LiDAR sends UDP packets at 3,125 µs intervals (32 pkts × 10 fps)
 2. Server measures arrival timestamps (process.hrtime, ns precision)
 3. Computes: frame period, packet interval, jitter (σ), bandwidth
-4. Derives TAS cycle = packet interval (3,125 → 3,130 µs rounded)
+4. Derives TAS cycle = packet interval (3,125 µs, locked ±5µs)
 5. Calculates wire time: (3,392 + 38) × 8 / 1,000 Mbps = 27.44 µs
 6. TC7 slot = wire time × 2 margin = 54.9 µs (1.75% utilization)
 7. Streams profile + auto-TAS via WebSocket (type: 'profile')
