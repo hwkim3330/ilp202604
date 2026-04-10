@@ -204,7 +204,7 @@
     <!-- Timing canvases -->
     <div class="timing-canvases">
       <div class="tc-cell">
-        <div class="tc-label">Packet Arrivals — 500 ms</div>
+        <div class="tc-label">Packet Arrivals — 500,000 µs window</div>
         <canvas id="cScope"></canvas>
       </div>
       <div class="tc-cell">
@@ -551,8 +551,8 @@ function drawScope() {
   for (const p of timingPkts) { if (p.t < start) continue; const px = (p.t - start) / winUs * w; const int = Math.min(1, p.pts / 16);
     if (p.newFrame) { x.strokeStyle = 'rgba(100,210,255,.15)'; x.lineWidth = 0.5; x.beginPath(); x.moveTo(px, top); x.lineTo(px, h - bot); x.stroke(); }
     const bh = 4 + int * (h - top - bot - 8); x.fillStyle = `rgba(10,132,255,${0.2 + int * 0.6})`; x.fillRect(px, h - bot - bh, 1.5, bh); }
-  x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '8px Inter';
-  for (let i = 0; i <= 5; i++) x.fillText(`${i * 100},000 µs`, (i / 5) * w + 2, h - 1);
+  x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '7px Inter';
+  for (let i = 0; i <= 5; i++) x.fillText(`${(i * 100000).toLocaleString()} µs`, (i / 5) * w + 2, h - 1);
 }
 
 function drawJitter() {
