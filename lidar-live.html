@@ -55,7 +55,7 @@
     .panel-status { font-size: 0.6rem; color: var(--text3); display: flex; align-items: center; gap: 5px; }
 
     /* ── Stats strip ── */
-    .stats-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
+    .stats-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
     .stat-card { background: var(--bg2); padding: 10px 12px; text-align: center; }
     .stat-val { font-size: 1.2rem; font-weight: 900; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
     .stat-label { font-size: 0.48rem; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
@@ -194,10 +194,11 @@
 
     <!-- Stats -->
     <div class="stats-strip">
-      <div class="stat-card"><div class="stat-val" id="sFps">—</div><div class="stat-label">Frame Rate</div></div>
-      <div class="stat-card"><div class="stat-val" id="sPktInt">—</div><div class="stat-label">Pkt Interval <span class="stat-unit">µs</span></div></div>
-      <div class="stat-card"><div class="stat-val" id="sJitter">—</div><div class="stat-label">Jitter σ <span class="stat-unit">µs</span></div></div>
-      <div class="stat-card"><div class="stat-val" id="sBw">—</div><div class="stat-label">Bandwidth <span class="stat-unit">Mbps</span></div></div>
+      <div class="stat-card"><div class="stat-val" id="sFps">—</div><div class="stat-label">FPS</div></div>
+      <div class="stat-card"><div class="stat-val" id="sPktInt">—</div><div class="stat-label">Pkt Interval</div></div>
+      <div class="stat-card"><div class="stat-val" id="sJitter">—</div><div class="stat-label">Jitter σ</div></div>
+      <div class="stat-card"><div class="stat-val" id="sBw">—</div><div class="stat-label">Bandwidth</div></div>
+      <div class="stat-card"><div class="stat-val" id="sWire">—</div><div class="stat-label">Wire Time</div></div>
     </div>
 
     <!-- Timing canvases -->
@@ -442,10 +443,14 @@ async function checkBoards() {
    ══════════════════════════════════════════ */
 function updateStats() {
   if (!profile) return;
-  document.getElementById('sFps').textContent = profile.fps;
-  document.getElementById('sPktInt').textContent = profile.pktIntervalUs.toLocaleString();
-  document.getElementById('sJitter').textContent = profile.jitterUs;
-  document.getElementById('sBw').textContent = profile.bandwidthMbps;
+  document.getElementById('sFps').textContent = profile.fps + ' Hz';
+  document.getElementById('sPktInt').textContent = profile.pktIntervalUs.toLocaleString() + ' µs';
+  document.getElementById('sJitter').textContent = profile.jitterUs + ' µs';
+  document.getElementById('sBw').textContent = profile.bandwidthMbps + ' Mbps';
+  if (autoTas && !autoTas.error) {
+    const el = document.getElementById('sWire');
+    if (el) el.textContent = autoTas.pktTxUs + ' µs';
+  }
 }
 
 function onProfile() {
@@ -641,7 +646,11 @@ let boardGcl = null; // { port: { gateEnabled, entries, cycleUs } }
 async function autoReadGcl() {
   // Try first connected board
   const boardId = document.getElementById('boardSel').value || config.boards.find(b => boardStatus[b.id])?.id;
-  if (!boardId || !boardStatus[boardId]) return;
+  if (!boardId) {
+    const el = document.getElementById('boardGclInfo');
+    if (el) el.innerHTML = '<span style="color:var(--text3)">No board connected</span>';
+    return;
+  }
 
   // Auto-select board if not selected
   if (!document.getElementById('boardSel').value) {
@@ -649,10 +658,19 @@ async function autoReadGcl() {
     upPush();
   }
 
+  const el = document.getElementById('boardGclInfo');
+  if (el) el.innerHTML = `<span style="color:var(--text3)">Reading ${boardId}...</span>`;
+
   try {
-    const r = await fetch(`/api/board/${boardId}/gcl`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const r = await fetch(`/api/board/${boardId}/gcl`, { signal: controller.signal });
+    clearTimeout(timeout);
     const d = await r.json();
-    if (d.error || !d.ports) return;
+    if (d.error || !d.ports) {
+      if (el) el.innerHTML = `<span style="color:var(--text2)">${boardId} connected</span> <span style="color:var(--text3)">(GCL read failed — ethernet CoAP may still be initializing)</span>`;
+      return;
+    }
     boardGcl = {};
     for (const [pn, pd] of Object.entries(d.ports)) {
       const entries = (pd.adminEntries || pd.operEntries || []).map(e => ({
@@ -662,7 +680,9 @@ async function autoReadGcl() {
       boardGcl[pn] = { enabled: pd.gateEnabled, entries, cycleUs: cycleNs / 1000 };
     }
     renderBoardGcl();
-  } catch {}
+  } catch (e) {
+    if (el) el.innerHTML = `<span style="color:var(--text2)">${boardId} connected</span> <span style="color:var(--text3)">(GCL read timeout)</span>`;
+  }
 }
 
 function renderBoardGcl() {
