@@ -230,7 +230,7 @@
         TSN 스위치의 <strong>TAS 설정을 자동 생성</strong>하고 적용합니다
       </div>
       <div class="highlight">
-        LiDAR 켜고 약 10초면 TAS 적용 완료
+        프로파일 안정화 10초 + 보드 Push 0.2초 = TAS 적용 완료
       </div>
     </div>
 
@@ -339,7 +339,7 @@
               "Push to Board" 버튼으로 TAS 설정을 스위치에 적용합니다.
               CoAP iPATCH로 YANG/CBOR 인코딩된 GCL을 전송합니다.
             </div>
-            <div class="pipe-time" style="background:rgba(255,149,0,.08); color:var(--orange);">~2초</div>
+            <div class="pipe-time" style="background:rgba(255,149,0,.08); color:var(--orange);">~0.2초 (실측 196ms)</div>
             <div class="pipe-detail">
               <strong>프로토콜:</strong> CoAP iPATCH (Ethernet) or Serial (fallback)<br>
               <strong>인코딩:</strong> YANG &rarr; SID &rarr; CBOR<br>
@@ -354,8 +354,8 @@
     <!-- Timeline bar -->
     <div class="section">
       <div class="section-label">Timeline</div>
-      <h2>Total Time: ~12 seconds</h2>
-      <p>LiDAR를 켜는 순간부터 스위치에 TAS가 적용되기까지의 시간입니다.</p>
+      <h2>Total Time: ~10.2 seconds</h2>
+      <p>LiDAR를 켜는 순간부터 스위치에 TAS가 적용되기까지의 시간입니다. (실측 벤치마크 결과)</p>
 
       <div class="timeline">
         <div class="tl-seg" style="flex:1; background:rgba(50,173,230,.08); color:var(--cyan);">
@@ -366,18 +366,24 @@
           <div class="tl-val">0.5s</div>
           <div class="tl-label">Min Profile</div>
         </div>
-        <div class="tl-seg" style="flex:16; background:rgba(88,86,214,.06); color:var(--indigo);">
+        <div class="tl-seg" style="flex:20; background:rgba(88,86,214,.06); color:var(--indigo);">
           <div class="tl-val">10s</div>
           <div class="tl-label">Stable Statistics (100 frames)</div>
         </div>
-        <div class="tl-seg" style="flex:4; background:rgba(255,149,0,.08); color:var(--orange);">
-          <div class="tl-val">~2s</div>
+        <div class="tl-seg" style="flex:1; background:rgba(255,149,0,.08); color:var(--orange);">
+          <div class="tl-val">0.2s</div>
           <div class="tl-label">Board Push</div>
         </div>
         <div class="tl-seg" style="flex:1; background:rgba(52,199,89,.08); color:var(--green);">
           <div class="tl-val">&#10003;</div>
           <div class="tl-label">Done</div>
         </div>
+      </div>
+
+      <div class="formula">
+        <strong>실측 벤치마크 (2026-04-10, Ethernet)</strong><br>
+        Profile 계산: <strong>0.02 ms</strong> | TAS 생성: <strong>0.02 ms</strong> | 보드 Push: <strong>196 ms</strong><br>
+        총 처리 시간 (프로파일 안정화 이후): <strong>197 ms</strong>
       </div>
     </div>
 

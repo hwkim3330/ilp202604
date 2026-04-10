@@ -78,6 +78,84 @@ app.get('/api/lidar/auto-tas/:id', (req, res) => {
   res.json(config);
 });
 
+// ── End-to-end benchmark: profile → auto-TAS → push to board ──
+app.post('/api/lidar/benchmark/:id', async (req, res) => {
+  const inst = lidar.instances.find(i => i.id === req.params.id);
+  if (!inst) return res.status(404).json({ error: 'LiDAR not found' });
+
+  const boardId = req.body.boardId || 'SW_REAR';
+  const portNum = req.body.port || 'swp0';
+  const transport = req.body.transport || 'eth';
+  const board = boards.find(b => b.id === boardId);
+  if (!board) return res.status(404).json({ error: `Board not found: ${boardId}` });
+
+  const timings = {};
+  const t0 = process.hrtime.bigint();
+
+  // Step 1: Get profile
+  const profile = inst.getTrafficProfile();
+  timings.profileMs = Number(process.hrtime.bigint() - t0) / 1e6;
+  if (!profile) return res.json({ error: 'Not enough LiDAR data yet' });
+
+  // Step 2: Generate TAS
+  const t1 = process.hrtime.bigint();
+  const tas = inst.generateTasConfig();
+  timings.tasGenMs = Number(process.hrtime.bigint() - t1) / 1e6;
+  if (!tas || tas.error) return res.json({ error: 'TAS generation failed', tas });
+
+  // Step 3: Push to board via internal API call
+  const t2 = process.hrtime.bigint();
+  try {
+    const pushBody = {
+      port: portNum,
+      cycleUs: tas.cycleUs,
+      entries: tas.entries.map(e => ({ gateStates: e.gateStates, durationUs: e.durationUs })),
+      transport,
+      host: board.host,
+    };
+
+    // Use fetch to call our own push-port API
+    const pushRes = await fetch(`http://localhost:${port}/api/gcl/push-port`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pushBody),
+    });
+    const pushResult = await pushRes.json();
+    timings.boardPushMs = Number(process.hrtime.bigint() - t2) / 1e6;
+
+    timings.totalMs = Number(process.hrtime.bigint() - t0) / 1e6;
+
+    // Save benchmark result
+    const result = {
+      benchmarkedAt: new Date().toISOString(),
+      lidarId: req.params.id,
+      boardId,
+      port: portNum,
+      transport,
+      timings: {
+        profileMs: Math.round(timings.profileMs * 100) / 100,
+        tasGenMs: Math.round(timings.tasGenMs * 100) / 100,
+        boardPushMs: Math.round(timings.boardPushMs * 100) / 100,
+        totalMs: Math.round(timings.totalMs * 100) / 100,
+      },
+      profile,
+      autoTas: tas,
+      pushResult,
+    };
+
+    const dataDir = path.join(ROOT, 'data');
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    const fname = `benchmark-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.json`;
+    fs.writeFileSync(path.join(dataDir, fname), JSON.stringify(result, null, 2));
+
+    res.json({ saved: fname, ...result });
+  } catch (e) {
+    timings.boardPushMs = Number(process.hrtime.bigint() - t2) / 1e6;
+    timings.totalMs = Number(process.hrtime.bigint() - t0) / 1e6;
+    res.status(500).json({ error: e.message, timings });
+  }
+});
+
 // Capture LiDAR timing snapshot → save to data/ directory
 app.post('/api/lidar/capture/:id', (req, res) => {
   const inst = lidar.instances.find(i => i.id === req.params.id);

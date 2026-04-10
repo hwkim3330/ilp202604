@@ -8,9 +8,9 @@
  */
 
 export const boards = [
-  { id: 'SW_REAR', host: '192.168.1.10', label: 'SW_REAR (Board-A)' },
-  { id: 'SW_FL',   host: '192.168.1.11', label: 'SW_FL (Board-B)' },
-  { id: 'SW_FR',   host: '192.168.1.12', label: 'SW_FR (Board-C)' },
+  { id: 'SW_REAR', host: '192.168.1.10', label: 'SW_REAR (Board-A)', ports: ['1', '2'] },
+  { id: 'SW_FL',   host: '192.168.1.11', label: 'SW_FL (Board-B)', ports: ['1', '2'] },
+  { id: 'SW_FR',   host: '192.168.1.12', label: 'SW_FR (Board-C)', ports: ['1', '2'] },
 ];
 
 export const lidars = [

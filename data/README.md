@@ -32,9 +32,24 @@ Server (lidar-proxy.js)
 | 프로파일 최소 데이터 | **0.5초** (5프레임) | `frameTimestamps.length >= 3` |
 | 안정된 통계 | **10초** (100프레임) | 슬라이딩 윈도우 full |
 | 브라우저 갱신 주기 | **1초** | 10프레임마다 WS push |
-| Push to Board | **~2초** | CoAP iPATCH (eth) or serial |
+| Push to Board | **0.2초** (실측 196ms) | CoAP iPATCH via Ethernet |
+| Profile 계산 | **0.02 ms** | getTrafficProfile() |
+| TAS 생성 | **0.02 ms** | generateTasConfig() |
 
-**결론: LiDAR 켜고 약 10초면 안정된 TAS를 보드에 적용 가능**
+**결론: 프로파일 안정화 10초 + 보드 Push 0.2초 = TAS 적용 완료**
+
+### End-to-End Benchmark (2026-04-10, Ethernet)
+
+```
+Profile:    0.02 ms   ← 메모리 내 계산 (100프레임 통계)
+TAS gen:    0.02 ms   ← 패킷 간격 → 사이클 → 게이트 엔트리
+Board push: 196 ms    ← CoAP iPATCH, keti-tsn-cli, LAN9662 port '1'
+Total:      197 ms    ← 프로파일 안정화 이후 처리 시간
+```
+
+- **Board port names**: `'1'`, `'2'` (숫자 문자열, NOT swp0/swp1)
+- **Board boot time**: 하드 리셋 후 YANG 데이터스토어 초기화 ~8분 소요
+- **no-sec 필수**: CoAP no-sec 패치 + save-config + reboot 후 이더넷 iPATCH 가능
 
 ## Capture API
 
