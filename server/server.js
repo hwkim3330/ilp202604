@@ -78,6 +78,76 @@ app.get('/api/lidar/auto-tas/:id', (req, res) => {
   res.json(config);
 });
 
+// ── TAS Presets — common switch configurations ──
+const TAS_PRESETS = [
+  {
+    id: 'lidar-auto', name: 'LiDAR Auto',
+    desc: 'Auto-derived from LiDAR packet timing (1 pkt/cycle)',
+    auto: true,
+  },
+  {
+    id: 'lidar-safe', name: 'LiDAR Safe',
+    desc: 'LiDAR TC7 with 4× margin for high-jitter environments',
+    cycleUs: 3150,
+    entries: [
+      { gateStates: 128, durationUs: 109.8, note: 'TC7 LiDAR (4× margin)' },
+      { gateStates: 0, durationUs: 2, note: 'guard' },
+      { gateStates: 127, durationUs: 3036.2, note: 'BE' },
+      { gateStates: 0, durationUs: 2, note: 'guard' },
+    ],
+  },
+  {
+    id: 'multi-sensor', name: 'Multi-Sensor',
+    desc: 'LiDAR TC7 + Radar TC6 + Camera TC5 + BE',
+    cycleUs: 3150,
+    entries: [
+      { gateStates: 128, durationUs: 55, note: 'TC7 LiDAR' },
+      { gateStates: 0, durationUs: 1, note: 'guard' },
+      { gateStates: 64, durationUs: 30, note: 'TC6 Radar' },
+      { gateStates: 0, durationUs: 1, note: 'guard' },
+      { gateStates: 32, durationUs: 20, note: 'TC5 Camera' },
+      { gateStates: 0, durationUs: 1, note: 'guard' },
+      { gateStates: 127, durationUs: 3042, note: 'BE' },
+    ],
+  },
+  {
+    id: 'strict-priority', name: 'Strict Priority',
+    desc: 'TC7 highest priority, descending time allocation',
+    cycleUs: 1000,
+    entries: [
+      { gateStates: 128, durationUs: 100, note: 'TC7' },
+      { gateStates: 64, durationUs: 100, note: 'TC6' },
+      { gateStates: 32, durationUs: 100, note: 'TC5' },
+      { gateStates: 16, durationUs: 100, note: 'TC4' },
+      { gateStates: 15, durationUs: 600, note: 'TC0-3 BE' },
+    ],
+  },
+  {
+    id: 'all-open', name: 'All Open (TAS Off)',
+    desc: 'All gates open — no scheduling, best effort only',
+    cycleUs: 1000,
+    entries: [
+      { gateStates: 255, durationUs: 1000, note: 'All open' },
+    ],
+  },
+];
+
+app.get('/api/tas/presets', (req, res) => {
+  // If lidar-auto is requested, populate from live data
+  const result = TAS_PRESETS.map(p => {
+    if (p.auto) {
+      const inst = lidar.instances[0];
+      const tas = inst?.generateTasConfig();
+      if (tas && !tas.error) {
+        return { ...p, cycleUs: tas.cycleUs, entries: tas.entries };
+      }
+      return { ...p, cycleUs: null, entries: null, note: 'No LiDAR data' };
+    }
+    return p;
+  });
+  res.json(result);
+});
+
 // ── End-to-end benchmark: profile → auto-TAS → push to board ──
 app.post('/api/lidar/benchmark/:id', async (req, res) => {
   const inst = lidar.instances.find(i => i.id === req.params.id);

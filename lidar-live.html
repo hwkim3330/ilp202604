@@ -217,10 +217,14 @@
       <div style="padding:6px 16px;border-bottom:1px solid var(--border);font-size:0.5rem;" id="boardGclInfo"><span style="color:var(--text3)">Loading board config...</span></div>
       <div class="gcl-edit-head">
         <h4>GCL Schedule</h4>
-        <div class="mode-pill">
-          <button class="mode-pb on" id="mAuto" onclick="setMode('auto')">Auto</button>
-          <button class="mode-pb" id="mCust" onclick="setMode('custom')">Custom</button>
-        </div>
+        <select class="act-sel" id="presetSel" onchange="applyPreset(this.value)" style="font-size:0.5rem;padding:3px 6px;">
+          <option value="lidar-auto">LiDAR Auto</option>
+          <option value="lidar-safe">LiDAR Safe (4×)</option>
+          <option value="multi-sensor">Multi-Sensor</option>
+          <option value="strict-priority">Strict Priority</option>
+          <option value="all-open">All Open</option>
+          <option value="custom">Custom</option>
+        </select>
       </div>
       <div style="padding:6px 0;">
         <div class="gcl-ctrl-row">
@@ -448,12 +452,30 @@ function onProfile() {
   updateStats();
   renderTopo();
   if (ed.mode === 'auto' && autoTas && !autoTas.error) syncAuto();
+  // Don't override preset or custom mode
 }
 
 /* ══════════════════════════════════════════
    GCL Editor
    ══════════════════════════════════════════ */
-window.setMode = (m) => { ed.mode=m; document.getElementById('mAuto').className='mode-pb'+(m==='auto'?' on':''); document.getElementById('mCust').className='mode-pb'+(m==='custom'?' on':''); if(m==='auto'&&autoTas)syncAuto(); upPush(); };
+let presets = [];
+
+async function loadPresets() {
+  try { presets = await (await fetch('/api/tas/presets')).json(); } catch {}
+}
+
+window.applyPreset = (id) => {
+  if (id === 'custom') { ed.mode = 'custom'; renderEd(); return; }
+  if (id === 'lidar-auto') { ed.mode = 'auto'; if (autoTas) syncAuto(); return; }
+  const p = presets.find(x => x.id === id);
+  if (!p || !p.entries) return;
+  ed.mode = 'preset';
+  ed.cycleUs = p.cycleUs;
+  ed.entries = p.entries.map(e => ({ gs: e.gateStates, dur: e.durationUs }));
+  document.getElementById('eCycle').value = ed.cycleUs;
+  document.getElementById('eCycleSl').value = Math.min(10000, ed.cycleUs);
+  renderEd();
+};
 
 function syncAuto() {
   if (!autoTas) return;
@@ -679,6 +701,7 @@ async function init() {
   renderTopo();
   checkBoards();
   setInterval(checkBoards, 15000);
+  loadPresets();
   renderEd();
 
   connectCloud(selectedLidar.id);

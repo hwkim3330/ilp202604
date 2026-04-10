@@ -124,6 +124,7 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
   }
 
   // ── Traffic profiling ──
+  let lastLockedCycle = 0; // locked cycle to prevent jitter flapping
   const PROFILE_WINDOW = 100; // track last N frames
   let pktCount = 0;
   let pktTimestamps = [];      // per-packet arrival times (µs precision)
@@ -212,8 +213,16 @@ function createLidarInstance(wss, id, udpPort, wsPaths) {
 
     // ── Derive cycle from packet pattern ──
     // Natural cycle = inter-packet interval (1 LiDAR pkt per cycle)
+    // Use ceiling to 10µs to ensure cycle >= packet interval (never truncate)
+    // Then lock: only change if drift exceeds 20µs from last locked value
     const naturalCycleUs = profile.pktIntervalUs;
-    const cycleUs = opts.cycleUs || Math.round(naturalCycleUs / 10) * 10; // round to 10µs
+    let candidateCycle = Math.ceil(naturalCycleUs / 10) * 10;
+    if (lastLockedCycle > 0 && Math.abs(candidateCycle - lastLockedCycle) <= 20) {
+      candidateCycle = lastLockedCycle; // hold steady
+    } else {
+      lastLockedCycle = candidateCycle; // re-lock on big change
+    }
+    const cycleUs = opts.cycleUs || candidateCycle;
 
     // ── Per-packet wire time ──
     const pktBytes = profile.pktSize + 20 + 14 + 4; // IP + Ethernet + FCS
