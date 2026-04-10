@@ -30,6 +30,9 @@ const KETI_TSN = path.resolve(__dirname, '../keti-tsn-cli/bin/keti-tsn.js');
 
 const router = express.Router();
 
+// Track last pushed TAS config per board+port (in-memory)
+const lastPushed = {};  // { "SW_REAR:1": { cycleUs, entries, pushedAt } }
+
 /**
  * Resolve board host from boardId or query params
  */
@@ -446,10 +449,34 @@ router.post('/gcl/push-port', async (req, res) => {
     const output = stdout + stderr;
     const success = output.includes('Success') || output.includes('2.04') || output.includes('success') || !output.includes('Error');
 
+    // Remember last pushed config
+    if (success) {
+      const boardId = req.body.boardId || boards.find(b => b.host === host)?.id || 'unknown';
+      lastPushed[`${boardId}:${port}`] = {
+        cycleUs, entries: solverEntries.map((e, i) => ({
+          gateStates: parseInt(e.gate_mask, 2),
+          durationUs: e.duration_us,
+        })),
+        pushedAt: new Date().toISOString(),
+      };
+    }
     res.json({ port, success, entries: entries.length, output: output.trim() });
   } catch (err) {
     res.status(500).json({ error: err.stderr || err.message });
   }
+});
+
+/* ── GET /api/board/:boardId/last-pushed ── Last pushed TAS (no board read needed) */
+router.get('/board/:boardId/last-pushed', (req, res) => {
+  const boardId = req.params.boardId;
+  const ports = {};
+  for (const [key, val] of Object.entries(lastPushed)) {
+    if (key.startsWith(boardId + ':')) {
+      const port = key.split(':')[1];
+      ports[port] = val;
+    }
+  }
+  res.json({ id: boardId, ports });
 });
 
 export default router;

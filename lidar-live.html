@@ -552,7 +552,7 @@ function drawScope() {
     if (p.newFrame) { x.strokeStyle = 'rgba(100,210,255,.15)'; x.lineWidth = 0.5; x.beginPath(); x.moveTo(px, top); x.lineTo(px, h - bot); x.stroke(); }
     const bh = 4 + int * (h - top - bot - 8); x.fillStyle = `rgba(10,132,255,${0.2 + int * 0.6})`; x.fillRect(px, h - bot - bh, 1.5, bh); }
   x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '8px Inter';
-  for (let i = 0; i <= 5; i++) x.fillText(`${i * 100}ms`, (i / 5) * w + 2, h - 1);
+  for (let i = 0; i <= 5; i++) x.fillText(`${i * 100},000 µs`, (i / 5) * w + 2, h - 1);
 }
 
 function drawJitter() {
@@ -659,8 +659,23 @@ async function autoReadGcl() {
   }
 
   const el = document.getElementById('boardGclInfo');
-  if (el) el.innerHTML = `<span style="color:var(--text3)">Reading ${boardId}...</span>`;
 
+  // Try last-pushed first (instant, no board read needed)
+  try {
+    const r = await fetch(`/api/board/${boardId}/last-pushed`);
+    const d = await r.json();
+    if (d.ports && Object.keys(d.ports).length > 0) {
+      boardGcl = {};
+      for (const [pn, pd] of Object.entries(d.ports)) {
+        boardGcl[pn] = { enabled: true, entries: pd.entries.map(e => ({ gs: e.gateStates, dur: e.durationUs })), cycleUs: pd.cycleUs };
+      }
+      renderBoardGcl();
+      return;
+    }
+  } catch {}
+
+  // Fallback: try full GCL read from board
+  if (el) el.innerHTML = `<span style="color:var(--text3)">Reading ${boardId}...</span>`;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
@@ -668,20 +683,18 @@ async function autoReadGcl() {
     clearTimeout(timeout);
     const d = await r.json();
     if (d.error || !d.ports) {
-      if (el) el.innerHTML = `<span style="color:var(--text2)">${boardId} connected</span> <span style="color:var(--text3)">(GCL read failed — ethernet CoAP may still be initializing)</span>`;
+      if (el) el.innerHTML = `<span style="color:var(--green)">${boardId} connected</span> <span style="color:var(--text3)">· Push TAS to configure</span>`;
       return;
     }
     boardGcl = {};
     for (const [pn, pd] of Object.entries(d.ports)) {
-      const entries = (pd.adminEntries || pd.operEntries || []).map(e => ({
-        gs: e.gateStates, dur: e.timeInterval / 1000
-      }));
+      const entries = (pd.adminEntries || pd.operEntries || []).map(e => ({ gs: e.gateStates, dur: e.timeInterval / 1000 }));
       const cycleNs = pd.adminCycleTime?.numerator || pd.operCycleTime?.numerator || 0;
       boardGcl[pn] = { enabled: pd.gateEnabled, entries, cycleUs: cycleNs / 1000 };
     }
     renderBoardGcl();
-  } catch (e) {
-    if (el) el.innerHTML = `<span style="color:var(--text2)">${boardId} connected</span> <span style="color:var(--text3)">(GCL read timeout)</span>`;
+  } catch {
+    if (el) el.innerHTML = `<span style="color:var(--green)">${boardId} connected</span> <span style="color:var(--text3)">· Push TAS to configure</span>`;
   }
 }
 
