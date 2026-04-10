@@ -230,7 +230,7 @@
     <!-- Timing canvases -->
     <div class="timing-canvases">
       <div class="tc-cell">
-        <div class="tc-label">Packet Interval (µs) — real-time</div>
+        <div class="tc-label">Frame Period (µs) — 10 fps target: 100,000 µs</div>
         <canvas id="cScope"></canvas>
       </div>
       <div class="tc-cell">
@@ -569,72 +569,68 @@ function getCtx(id) {
 
 function drawScope() {
   const { x, w, h } = getCtx('cScope'); x.clearRect(0, 0, w, h);
-  if (timingPkts.length < 10) return;
+  if (!profile || !profile.fps) return;
 
-  const N = 200;
-  const start = Math.max(0, timingPkts.length - N - 1);
-  const ints = [];
-  for (let i = start + 1; i < timingPkts.length; i++) ints.push(timingPkts[i].t - timingPkts[i-1].t);
-  if (ints.length < 5) return;
+  // Collect frame intervals from newFrame markers
+  const frameTs = [];
+  for (const p of timingPkts) { if (p.newFrame) frameTs.push(p.t); }
+  if (frameTs.length < 3) return;
 
-  const top = 16, bot = 14, left = 38, right = 6;
+  const frameInts = [];
+  for (let i = 1; i < frameTs.length; i++) frameInts.push(frameTs[i] - frameTs[i - 1]);
+  const N = Math.min(frameInts.length, 50); // last 50 frames = 5 seconds
+  const recent = frameInts.slice(-N);
+
+  const top = 16, bot = 14, left = 48, right = 6;
   const pw = w - left - right, ph = h - top - bot;
-  const expected = profile ? profile.pktIntervalUs : 3125;
+  const target = 100000; // 10fps = 100,000µs
 
-  // Y scale: center on expected, ± max deviation
-  const maxDev = Math.max(...ints.map(v => Math.abs(v - expected)), 30);
-  const yMin = expected - maxDev * 1.3, yMax = expected + maxDev * 1.3;
+  // Y scale
+  const maxDev = Math.max(...recent.map(v => Math.abs(v - target)), 200);
+  const yMin = target - maxDev * 1.3, yMax = target + maxDev * 1.3;
   const toY = (v) => top + (1 - (v - yMin) / (yMax - yMin)) * ph;
 
-  // ±σ band
-  if (profile) {
-    const jit = profile.jitterUs || 0;
-    x.fillStyle = 'rgba(10,132,255,.05)';
-    x.fillRect(left, toY(expected + jit), pw, toY(expected - jit) - toY(expected + jit));
-  }
-
-  // Expected line
-  x.strokeStyle = 'rgba(10,132,255,.25)'; x.lineWidth = 1; x.setLineDash([4, 3]);
-  x.beginPath(); x.moveTo(left, toY(expected)); x.lineTo(left + pw, toY(expected)); x.stroke();
+  // Target line
+  x.strokeStyle = 'rgba(48,209,88,.3)'; x.lineWidth = 1; x.setLineDash([4, 3]);
+  x.beginPath(); x.moveTo(left, toY(target)); x.lineTo(left + pw, toY(target)); x.stroke();
   x.setLineDash([]);
 
-  // Line chart
-  x.beginPath();
-  x.strokeStyle = 'rgba(10,132,255,.5)'; x.lineWidth = 1.2;
-  for (let i = 0; i < ints.length; i++) {
-    const px = left + (i / (ints.length - 1)) * pw;
-    i === 0 ? x.moveTo(px, toY(ints[i])) : x.lineTo(px, toY(ints[i]));
-  }
-  x.stroke();
+  // Bars
+  const barW = Math.max(2, pw / N - 2);
+  for (let i = 0; i < recent.length; i++) {
+    const bx = left + (i / N) * pw;
+    const val = recent[i];
+    const dev = Math.abs(val - target);
+    const ty = toY(target), vy = toY(val);
 
-  // Fill under line
-  x.lineTo(left + pw, toY(expected));
-  x.lineTo(left, toY(expected));
-  x.closePath();
-  x.fillStyle = 'rgba(10,132,255,.06)';
-  x.fill();
+    // Bar from target to value
+    const barTop = Math.min(ty, vy), barH = Math.abs(vy - ty);
+    const color = dev < 200 ? 'rgba(48,209,88,.5)' : dev < 500 ? 'rgba(255,214,10,.5)' : 'rgba(255,69,58,.5)';
+    x.fillStyle = color;
+    x.beginPath(); x.roundRect(bx, barTop, barW, Math.max(barH, 1), 1); x.fill();
 
-  // Highlight outliers
-  for (let i = 0; i < ints.length; i++) {
-    const dev = Math.abs(ints[i] - expected);
-    if (dev > 100) {
-      const px = left + (i / (ints.length - 1)) * pw;
-      x.fillStyle = dev > 500 ? 'rgba(255,69,58,.8)' : 'rgba(255,214,10,.6)';
-      x.beginPath(); x.arc(px, toY(ints[i]), 2.5, 0, Math.PI * 2); x.fill();
-    }
+    // Dot at value
+    x.fillStyle = color.replace('.5)', '.8)');
+    x.beginPath(); x.arc(bx + barW / 2, vy, 2, 0, Math.PI * 2); x.fill();
   }
 
   // Y axis
   x.fillStyle = 'rgba(255,255,255,.18)'; x.font = '7px Inter'; x.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
     const v = yMin + (yMax - yMin) * (1 - i / 4);
-    x.fillText(`${Math.round(v)}`, left - 3, top + (i / 4) * ph + 3);
+    x.fillText(`${(v/1000).toFixed(1)}ms`, left - 3, top + (i / 4) * ph + 3);
   }
   x.textAlign = 'left';
-  x.fillStyle = 'rgba(10,132,255,.4)'; x.font = '7px Inter';
-  x.fillText(`${expected} µs`, left + 2, toY(expected) - 4);
-  x.fillStyle = 'rgba(255,255,255,.1)';
-  x.fillText(`${ints.length} pkts`, left + pw - 28, h - 2);
+
+  // Target label
+  x.fillStyle = 'rgba(48,209,88,.5)'; x.font = '7px Inter';
+  x.fillText(`${(target/1000).toFixed(0)} ms (${target.toLocaleString()} µs)`, left + 2, toY(target) - 4);
+
+  // Jitter label
+  const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
+  const jit = Math.sqrt(recent.reduce((s, v) => s + (v - mean) ** 2, 0) / recent.length);
+  x.fillStyle = 'rgba(255,255,255,.3)'; x.font = '7px Inter';
+  x.fillText(`σ = ${jit.toFixed(0)} µs`, left + pw - 55, top + 10);
 }
 
 function drawJitter() {
