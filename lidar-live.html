@@ -227,15 +227,15 @@
       <div class="stat-card"><div class="stat-val" id="sWire">—</div><div class="stat-label">Wire Time</div></div>
     </div>
 
-    <!-- Visualizations -->
+    <!-- Timing canvases -->
     <div class="timing-canvases">
       <div class="tc-cell">
-        <div class="tc-label">Packet Stream — real-time</div>
-        <canvas id="cStream"></canvas>
+        <div class="tc-label">Packet Arrivals — 500 ms</div>
+        <canvas id="cScope"></canvas>
       </div>
       <div class="tc-cell">
-        <div class="tc-label">TAS Gate Cycle — 1 cycle animation</div>
-        <canvas id="cGate"></canvas>
+        <div class="tc-label">Packet Interval Distribution</div>
+        <canvas id="cJitter"></canvas>
       </div>
     </div>
 
@@ -567,155 +567,46 @@ function getCtx(id) {
   return { x, w: r.width, h: r.height };
 }
 
-/* ── Scrolling packet stream (ECG-style) ── */
-function drawStream() {
-  const { x, w, h } = getCtx('cStream'); x.clearRect(0, 0, w, h);
+function drawScope() {
+  const { x, w, h } = getCtx('cScope'); x.clearRect(0, 0, w, h);
   if (timingPkts.length < 2) return;
-
-  const winUs = 300000; // 300ms window
-  const now = timingPkts[timingPkts.length - 1].t;
-  const start = now - winUs;
-  const top = 14, bot = 6;
-  const mid = top + (h - top - bot) / 2;
-
-  // Scrolling baseline
-  x.strokeStyle = 'rgba(255,255,255,.04)'; x.lineWidth = 1;
-  x.beginPath(); x.moveTo(0, mid); x.lineTo(w, mid); x.stroke();
-
-  // Frame counter
-  let frameIdx = 0;
-  const frameColors = ['rgba(10,132,255,.6)', 'rgba(100,210,255,.4)'];
-
-  for (const p of timingPkts) {
-    if (p.t < start) { if (p.newFrame) frameIdx++; continue; }
-    const px = ((p.t - start) / winUs) * w;
-
-    if (p.newFrame) {
-      frameIdx++;
-      // Frame boundary — wider pulse
-      x.fillStyle = 'rgba(255,255,255,.08)';
-      x.fillRect(px - 0.5, top, 1, h - top - bot);
-    }
-
-    // Packet tick — height = points intensity
-    const intensity = Math.min(1, p.pts / 16);
-    const tickH = 6 + intensity * (h - top - bot - 12);
-    const col = frameColors[frameIdx % 2];
-    x.fillStyle = col;
-    x.fillRect(px, mid - tickH / 2, 1.5, tickH);
-  }
-
-  // Labels
-  x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '7px Inter';
-  x.fillText('300 ms →', w - 42, h - 1);
-  if (profile) {
-    x.fillStyle = 'rgba(255,255,255,.25)'; x.font = '7px Inter';
-    x.fillText(`${profile.fps} fps · ${profile.pktsPerFrame} pkts/frame`, 4, h - 1);
-  }
+  const winUs = 500000, now = timingPkts[timingPkts.length - 1].t, start = now - winUs;
+  const top = 18, bot = 12;
+  let toggle = false;
+  for (const p of timingPkts) { if (p.t < start) continue; if (p.newFrame) toggle = !toggle;
+    if (toggle) { const px = (p.t - start) / winUs * w; x.fillStyle = 'rgba(10,132,255,.06)'; x.fillRect(px, top, 2, h - top - bot); } }
+  for (const p of timingPkts) { if (p.t < start) continue; const px = (p.t - start) / winUs * w; const int = Math.min(1, p.pts / 16);
+    if (p.newFrame) { x.strokeStyle = 'rgba(100,210,255,.15)'; x.lineWidth = 0.5; x.beginPath(); x.moveTo(px, top); x.lineTo(px, h - bot); x.stroke(); }
+    const bh = 4 + int * (h - top - bot - 8); x.fillStyle = `rgba(10,132,255,${0.2 + int * 0.6})`; x.fillRect(px, h - bot - bh, 1.5, bh); }
+  x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '8px Inter';
+  for (let i = 0; i <= 5; i++) x.fillText(`${i * 100} ms`, (i / 5) * w + 2, h - 1);
 }
 
-/* ── TAS gate cycle animation ── */
-let gatePhase = 0;
-function drawGate() {
-  const { x, w, h } = getCtx('cGate'); x.clearRect(0, 0, w, h);
-
-  const entries = ed.entries.length ? ed.entries : [{ gs: 255, dur: 3125 }];
-  const cycleUs = ed.cycleUs || 3125;
-  const wireUs = autoTas?.pktTxUs || 27.44;
-
-  const mg = 10, top = 20, gateH = 22, pktY = top + gateH + 6, pktH = 16, bot = 16;
-  const bw = w - mg * 2;
-
-  // Gate bars
-  let gx = mg;
-  for (const e of entries) {
-    const ew = (e.dur / cycleUs) * bw;
-    if (ew < 0.5) { gx += ew; continue; }
-
-    let bg, fg;
-    if (e.gs === 128) { bg = 'rgba(10,132,255,.2)'; fg = 'rgba(10,132,255,.8)'; }
-    else if (e.gs === 0) { bg = 'rgba(255,214,10,.1)'; fg = 'rgba(255,214,10,.5)'; }
-    else if (e.gs === 127 || e.gs === 255) { bg = 'rgba(255,255,255,.03)'; fg = 'rgba(255,255,255,.15)'; }
-    else { bg = 'rgba(94,92,230,.15)'; fg = 'rgba(94,92,230,.6)'; }
-
-    // Gate block
-    x.fillStyle = bg;
-    x.beginPath(); x.roundRect(gx, top, Math.max(ew - 1, 1), gateH, 3); x.fill();
-
-    // Top bar (gate state indicator)
-    x.fillStyle = fg;
-    x.fillRect(gx, top, Math.max(ew - 1, 1), 3);
-
-    // Label
-    if (ew > 20) {
-      x.fillStyle = fg; x.font = 'bold 8px Inter'; x.textAlign = 'center';
-      const lbl = e.gs === 128 ? 'TC7' : e.gs === 0 ? 'G' : e.gs === 127 ? 'BE' : e.gs === 255 ? 'ALL' : 'TC';
-      x.fillText(lbl, gx + ew / 2, top + gateH / 2 + 6);
-      x.textAlign = 'left';
-    }
-    gx += ew;
-  }
-
-  // Animated packet
-  gatePhase = (gatePhase + 0.008) % 1;
-  const pktW = Math.max((wireUs / cycleUs) * bw, 4);
-  const pktX = mg + gatePhase * bw;
-
-  // Check if packet is in an open gate
-  let pos = 0, inGate = false, gateColor = '';
-  for (const e of entries) {
-    const eStart = (pos / cycleUs) * bw;
-    const eEnd = ((pos + e.dur) / cycleUs) * bw;
-    if (gatePhase * bw >= eStart && gatePhase * bw < eEnd) {
-      inGate = e.gs !== 0; // gate=0 means closed
-      if (e.gs === 128) gateColor = '#0a84ff';
-      else if (e.gs === 127 || e.gs === 255) gateColor = '#666';
-      else gateColor = '#5e5ce6';
-      break;
-    }
-    pos += e.dur;
-  }
-
-  // Packet
-  if (inGate) {
-    // Passing through — bright
-    const grad = x.createLinearGradient(pktX, 0, pktX + pktW, 0);
-    grad.addColorStop(0, gateColor); grad.addColorStop(1, gateColor + '88');
-    x.fillStyle = grad;
-    x.beginPath(); x.roundRect(pktX, pktY + 2, pktW, pktH - 4, 3); x.fill();
-    // Glow
-    x.shadowColor = gateColor; x.shadowBlur = 8;
-    x.fillRect(pktX + 1, pktY + 4, pktW - 2, pktH - 8);
-    x.shadowBlur = 0;
-  } else {
-    // Blocked — dim red
-    x.fillStyle = 'rgba(255,69,58,.4)';
-    x.beginPath(); x.roundRect(pktX, pktY + 2, pktW, pktH - 4, 3); x.fill();
-    // X mark
-    x.strokeStyle = 'rgba(255,69,58,.6)'; x.lineWidth = 1.5;
-    x.beginPath(); x.moveTo(pktX + 2, pktY + 4); x.lineTo(pktX + pktW - 2, pktY + pktH - 4); x.stroke();
-    x.beginPath(); x.moveTo(pktX + pktW - 2, pktY + 4); x.lineTo(pktX + 2, pktY + pktH - 4); x.stroke();
-  }
-
-  // Row labels
-  x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '7px Inter';
-  x.fillText('Gate', 1, top + gateH / 2 + 3);
-  x.fillText('Pkt', 1, pktY + pktH / 2 + 3);
-
-  // Time axis
-  x.fillStyle = 'rgba(255,255,255,.1)'; x.font = '7px Inter';
-  for (let i = 0; i <= 4; i++) {
-    const tx = mg + (i / 4) * bw;
-    x.fillText(`${Math.round(cycleUs * i / 4)}`, tx, h - 2);
-  }
-  x.fillText('µs', mg + bw - 8, h - 2);
-
-  // Cycle label
-  x.fillStyle = 'rgba(255,255,255,.2)'; x.font = '7px Inter';
-  x.fillText(`cycle ${cycleUs} µs`, mg, top - 4);
+function drawJitter() {
+  const { x, w, h } = getCtx('cJitter'); x.clearRect(0, 0, w, h);
+  if (timingPkts.length < 10) return;
+  const ints = [];
+  for (let i = Math.max(0, timingPkts.length - 300); i < timingPkts.length - 1; i++) ints.push(timingPkts[i + 1].t - timingPkts[i].t);
+  if (ints.length < 5) return;
+  const top = 18, bot = 12, maxInt = Math.max(...ints) * 1.1, bins = 50, binW = maxInt / bins;
+  const counts = new Array(bins).fill(0);
+  for (const v of ints) { const b = Math.min(bins - 1, Math.floor(v / binW)); counts[b]++; }
+  const maxC = Math.max(...counts, 1), barW = (w - 16) / bins;
+  const expectedUs = profile ? profile.pktIntervalUs : 3125;
+  for (let i = 0; i < bins; i++) { if (!counts[i]) continue;
+    const bh = (counts[i] / maxC) * (h - top - bot), bx = 8 + i * barW;
+    const dist = Math.abs(i * binW - expectedUs) / expectedUs;
+    const color = dist < .1 ? 'rgba(48,209,88,.5)' : dist < .5 ? 'rgba(255,214,10,.35)' : 'rgba(255,69,58,.35)';
+    x.fillStyle = color; x.beginPath(); x.roundRect(bx, h - bot - bh, Math.max(barW - 1, 1), bh, 1); x.fill(); }
+  if (profile) { const ex = 8 + (expectedUs / maxInt) * (w - 16);
+    x.strokeStyle = 'rgba(10,132,255,.4)'; x.lineWidth = 1; x.setLineDash([3, 3]);
+    x.beginPath(); x.moveTo(ex, top); x.lineTo(ex, h - bot); x.stroke(); x.setLineDash([]);
+    x.fillStyle = 'rgba(10,132,255,.5)'; x.font = '8px Inter'; x.fillText(`${expectedUs.toLocaleString()} µs`, ex + 3, top + 10); }
+  x.fillStyle = 'rgba(255,255,255,.12)'; x.font = '7px Inter';
+  for (let i = 0; i <= 4; i++) x.fillText(`${Math.round(maxInt * i / 4).toLocaleString()} µs`, 8 + (i / 4) * (w - 16), h - 1);
 }
 
-function renderTimingLoop() { requestAnimationFrame(renderTimingLoop); drawStream(); drawGate(); }
+function renderTimingLoop() { requestAnimationFrame(renderTimingLoop); drawScope(); drawJitter(); }
 
 /* ══════════════════════════════════════════
    Board Actions
