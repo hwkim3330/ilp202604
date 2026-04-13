@@ -61,10 +61,7 @@
     .stat-label { font-size: 0.48rem; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
     .stat-unit { font-size: 0.55rem; font-weight: 500; color: var(--text3); }
 
-    /* ── Timing canvases ── */
-    .timing-canvases { display: grid; grid-template-rows: 1fr 1fr; gap: 1px; background: var(--border); flex: 1; min-height: 0; }
-    .tc-cell { background: var(--bg2); position: relative; overflow: hidden; }
-    .tc-cell canvas { width: 100%; height: 100%; display: block; }
+    /* ── Timing canvas ── */
     .tc-label { position: absolute; top: 6px; left: 10px; font-size: 0.5rem; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
 
     /* ── GCL bar ── */
@@ -227,16 +224,10 @@
       <div class="stat-card"><div class="stat-val" id="sWire">—</div><div class="stat-label">Wire Time</div></div>
     </div>
 
-    <!-- Timing canvases -->
-    <div class="timing-canvases">
-      <div class="tc-cell">
-        <div class="tc-label">Packet Arrivals — 500 ms</div>
-        <canvas id="cScope"></canvas>
-      </div>
-      <div class="tc-cell">
-        <div class="tc-label">Packet Interval Distribution</div>
-        <canvas id="cJitter"></canvas>
-      </div>
+    <!-- Timing canvas -->
+    <div style="flex:1;min-height:0;position:relative;background:var(--bg2);border-bottom:1px solid var(--border);">
+      <div class="tc-label">Packet Interval Distribution (µs)</div>
+      <canvas id="cJitter" style="width:100%;height:100%;display:block;"></canvas>
     </div>
 
     <!-- GCL Editor -->
@@ -567,21 +558,6 @@ function getCtx(id) {
   return { x, w: r.width, h: r.height };
 }
 
-function drawScope() {
-  const { x, w, h } = getCtx('cScope'); x.clearRect(0, 0, w, h);
-  if (timingPkts.length < 2) return;
-  const winUs = 500000, now = timingPkts[timingPkts.length - 1].t, start = now - winUs;
-  const top = 18, bot = 12;
-  let toggle = false;
-  for (const p of timingPkts) { if (p.t < start) continue; if (p.newFrame) toggle = !toggle;
-    if (toggle) { const px = (p.t - start) / winUs * w; x.fillStyle = 'rgba(10,132,255,.06)'; x.fillRect(px, top, 2, h - top - bot); } }
-  for (const p of timingPkts) { if (p.t < start) continue; const px = (p.t - start) / winUs * w; const int = Math.min(1, p.pts / 16);
-    if (p.newFrame) { x.strokeStyle = 'rgba(100,210,255,.15)'; x.lineWidth = 0.5; x.beginPath(); x.moveTo(px, top); x.lineTo(px, h - bot); x.stroke(); }
-    const bh = 4 + int * (h - top - bot - 8); x.fillStyle = `rgba(10,132,255,${0.2 + int * 0.6})`; x.fillRect(px, h - bot - bh, 1.5, bh); }
-  x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '8px Inter';
-  for (let i = 0; i <= 5; i++) x.fillText(`${i * 100} ms`, (i / 5) * w + 2, h - 1);
-}
-
 function drawJitter() {
   const { x, w, h } = getCtx('cJitter'); x.clearRect(0, 0, w, h);
   if (timingPkts.length < 10) return;
@@ -606,7 +582,7 @@ function drawJitter() {
   for (let i = 0; i <= 4; i++) x.fillText(`${Math.round(maxInt * i / 4).toLocaleString()} µs`, 8 + (i / 4) * (w - 16), h - 1);
 }
 
-function renderTimingLoop() { requestAnimationFrame(renderTimingLoop); drawScope(); drawJitter(); }
+function renderTimingLoop() { requestAnimationFrame(renderTimingLoop); drawJitter(); }
 
 /* ══════════════════════════════════════════
    Board Actions
