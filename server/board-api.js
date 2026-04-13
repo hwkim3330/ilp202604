@@ -63,72 +63,57 @@ async function ketiTsn(args, timeout = 30000) {
   });
 }
 
-/* ── GET /api/board/status ── (backward compat, eth → serial fallback) */
+/* ── GET /api/board/status ── (backward compat, ping-based) */
 router.get('/board/status', async (req, res) => {
-  const device = req.query.device || '/dev/ttyACM0';
   const host = req.query.host || boards[0]?.host;
-
-  // Try ethernet if host available
   if (host) {
     try {
-      const { stdout } = await ketiTsn(['checksum', '--transport', 'eth', '--host', host], 5000);
-      const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
-      if (connected) return res.json({ connected: true, transport: 'eth', host });
+      await execFileAsync('ping', ['-c', '1', '-W', '1', host], { timeout: 2000 });
+      return res.json({ connected: true, transport: 'ping', host });
     } catch {}
   }
-  // Fallback to serial
-  if (fs.existsSync(device)) {
-    try {
-      const { stdout } = await ketiTsn(['checksum', '--transport', 'serial', '--port', device], 5000);
-      const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
-      if (connected) return res.json({ connected: true, transport: 'serial', device });
-    } catch {}
+  if (fs.existsSync(req.query.device || '/dev/ttyACM0')) {
+    return res.json({ connected: true, transport: 'serial', device: req.query.device || '/dev/ttyACM0' });
   }
   res.json({ connected: false, transport: 'none' });
 });
 
-/* ── GET /api/board/:boardId/status ── Per-board status (eth → serial fallback) */
+/* ── GET /api/board/:boardId/status ── Per-board status (ping + CoAP) */
 router.get('/board/:boardId/status', async (req, res) => {
   const board = boards.find(b => b.id === req.params.boardId);
   if (!board) return res.status(404).json({ error: `Board not found: ${req.params.boardId}` });
 
-  // Try ethernet
   try {
-    const { stdout } = await ketiTsn(['checksum', '--transport', 'eth', '--host', board.host], 5000);
-    const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
-    if (connected) return res.json({ id: board.id, connected: true, transport: 'eth', host: board.host, label: board.label });
-  } catch {}
-  // Fallback to serial (first board only)
-  if (board.id === boards[0]?.id && fs.existsSync('/dev/ttyACM0')) {
-    try {
-      const { stdout } = await ketiTsn(['checksum', '--transport', 'serial', '--port', '/dev/ttyACM0'], 5000);
-      const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
-      if (connected) return res.json({ id: board.id, connected: true, transport: 'serial', host: board.host, label: board.label });
-    } catch {}
+    await execFileAsync('ping', ['-c', '1', '-W', '1', board.host], { timeout: 2000 });
+    res.json({ id: board.id, connected: true, host: board.host, label: board.label, transport: 'ping' });
+  } catch {
+    res.json({ id: board.id, connected: false, host: board.host, label: board.label });
   }
-  res.json({ id: board.id, connected: false, host: board.host, label: board.label });
 });
 
-/* ── GET /api/boards/status ── All boards status (eth → serial fallback) */
+/* ── GET /api/boards/status ── All boards status (ping + CoAP) */
 router.get('/boards/status', async (req, res) => {
   const results = await Promise.all(boards.map(async (board) => {
-    // Try ethernet first
+    // Fast ping check first
     try {
-      const args = ['checksum', '--transport', 'eth', '--host', board.host];
-      const { stdout } = await ketiTsn(args, 5000);
-      const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
-      if (connected) return { id: board.id, connected: true, host: board.host, label: board.label, transport: 'eth' };
+      await execFileAsync('ping', ['-c', '1', '-W', '1', board.host], { timeout: 2000 });
+    } catch {
+      // Ping failed — board unreachable
+      return { id: board.id, connected: false, host: board.host, label: board.label };
+    }
+    // Ping OK — try CoAP checksum (eth, then serial)
+    let transport = 'ping';
+    try {
+      const { stdout } = await ketiTsn(['checksum', '--transport', 'eth', '--host', board.host], 5000);
+      if (stdout.includes('checksum') || stdout.includes('Checksum')) transport = 'eth';
     } catch {}
-    // Fallback to serial (only for first board)
-    if (board.id === boards[0]?.id && fs.existsSync('/dev/ttyACM0')) {
+    if (transport === 'ping' && board.id === boards[0]?.id && fs.existsSync('/dev/ttyACM0')) {
       try {
-        const args = ['checksum', '--transport', 'serial', '--port', '/dev/ttyACM0'];
-        const { stdout } = await ketiTsn(args, 5000);
-        const connected = stdout.includes('checksum') || stdout.includes('Checksum') || !stdout.includes('Error');
-        if (connected) return { id: board.id, connected: true, host: board.host, label: board.label, transport: 'serial' };
+        const { stdout } = await ketiTsn(['checksum', '--transport', 'serial', '--port', '/dev/ttyACM0'], 5000);
+        if (stdout.includes('checksum') || stdout.includes('Checksum')) transport = 'serial';
       } catch {}
     }
-    return { id: board.id, connected: false, host: board.host, label: board.label };
+    return { id: board.id, connected: true, host: board.host, label: board.label, transport };
   }));
   res.json(results);
 });
