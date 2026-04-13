@@ -224,10 +224,16 @@
       <div class="stat-card"><div class="stat-val" id="sWire">—</div><div class="stat-label">Wire Time</div></div>
     </div>
 
-    <!-- Timing canvas -->
-    <div style="flex:1;min-height:0;position:relative;background:var(--bg2);border-bottom:1px solid var(--border);">
-      <div class="tc-label">Packet Interval Distribution (µs)</div>
-      <canvas id="cJitter" style="width:100%;height:100%;display:block;"></canvas>
+    <!-- Timing canvases -->
+    <div style="flex:1;min-height:0;display:grid;grid-template-rows:1fr 1fr;gap:1px;background:var(--border);">
+      <div style="position:relative;background:var(--bg2);overflow:hidden;">
+        <div class="tc-label">Jitter Trend (µs) — last 60s</div>
+        <canvas id="cTrend" style="width:100%;height:100%;display:block;"></canvas>
+      </div>
+      <div style="position:relative;background:var(--bg2);overflow:hidden;">
+        <div class="tc-label">Packet Interval Distribution (µs)</div>
+        <canvas id="cJitter" style="width:100%;height:100%;display:block;"></canvas>
+      </div>
     </div>
 
     <!-- GCL Editor -->
@@ -474,8 +480,8 @@ function updateStats() {
 function onProfile() {
   updateStats();
   renderTopo();
+  recordJitter();
   if (ed.mode === 'auto' && autoTas && !autoTas.error) syncAuto();
-  // Don't override preset or custom mode
 }
 
 /* ══════════════════════════════════════════
@@ -558,6 +564,71 @@ function getCtx(id) {
   return { x, w: r.width, h: r.height };
 }
 
+/* ── Jitter trend (rolling 60s) ── */
+const jitterHistory = []; // { t: Date.now(), jitter, pktInt }
+const TREND_MAX = 120; // 2 per second × 60s
+
+function recordJitter() {
+  if (!profile) return;
+  jitterHistory.push({ t: Date.now(), jitter: profile.jitterUs, pktInt: profile.pktIntervalUs });
+  if (jitterHistory.length > TREND_MAX) jitterHistory.shift();
+}
+
+function drawTrend() {
+  const { x, w, h } = getCtx('cTrend'); x.clearRect(0, 0, w, h);
+  if (jitterHistory.length < 3) return;
+
+  const top = 16, bot = 12, left = 32, right = 6;
+  const pw = w - left - right, ph = h - top - bot;
+
+  const vals = jitterHistory.map(h => h.jitter);
+  const maxJ = Math.max(...vals, 100);
+  const toY = (v) => top + (1 - v / (maxJ * 1.2)) * ph;
+
+  // Fill area
+  x.beginPath();
+  x.moveTo(left, toY(0));
+  for (let i = 0; i < vals.length; i++) {
+    x.lineTo(left + (i / (vals.length - 1)) * pw, toY(vals[i]));
+  }
+  x.lineTo(left + pw, toY(0));
+  x.closePath();
+  x.fillStyle = 'rgba(10,132,255,.08)';
+  x.fill();
+
+  // Line
+  x.beginPath();
+  x.strokeStyle = 'rgba(10,132,255,.6)'; x.lineWidth = 1.5;
+  for (let i = 0; i < vals.length; i++) {
+    const px = left + (i / (vals.length - 1)) * pw;
+    i === 0 ? x.moveTo(px, toY(vals[i])) : x.lineTo(px, toY(vals[i]));
+  }
+  x.stroke();
+
+  // Current value dot
+  const last = vals[vals.length - 1];
+  const lx = left + pw, ly = toY(last);
+  x.fillStyle = 'rgba(10,132,255,.9)';
+  x.beginPath(); x.arc(lx, ly, 3, 0, Math.PI * 2); x.fill();
+
+  // Current value label
+  x.fillStyle = 'rgba(10,132,255,.8)'; x.font = 'bold 9px Inter';
+  x.fillText(`${last} µs`, lx - 40, ly - 6);
+
+  // Y axis
+  x.fillStyle = 'rgba(255,255,255,.15)'; x.font = '7px Inter'; x.textAlign = 'right';
+  for (let i = 0; i <= 3; i++) {
+    const v = (maxJ * 1.2 * i / 3);
+    x.fillText(`${Math.round(v)}`, left - 3, toY(v) + 3);
+  }
+  x.textAlign = 'left';
+
+  // Time labels
+  x.fillStyle = 'rgba(255,255,255,.1)'; x.font = '7px Inter';
+  x.fillText('60s ago', left, h - 1);
+  x.fillText('now', left + pw - 16, h - 1);
+}
+
 function drawJitter() {
   const { x, w, h } = getCtx('cJitter'); x.clearRect(0, 0, w, h);
   if (timingPkts.length < 10) return;
@@ -582,7 +653,7 @@ function drawJitter() {
   for (let i = 0; i <= 4; i++) x.fillText(`${Math.round(maxInt * i / 4).toLocaleString()} µs`, 8 + (i / 4) * (w - 16), h - 1);
 }
 
-function renderTimingLoop() { requestAnimationFrame(renderTimingLoop); drawJitter(); }
+function renderTimingLoop() { requestAnimationFrame(renderTimingLoop); drawTrend(); drawJitter(); }
 
 /* ══════════════════════════════════════════
    Board Actions
